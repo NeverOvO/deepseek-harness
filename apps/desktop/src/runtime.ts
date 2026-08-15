@@ -36,9 +36,10 @@ export async function startDesktopRuntime(): Promise<DesktopRuntime> {
     [entry, 'web', '--host', '127.0.0.1', '--port', '0'],
     {
       env: runtimeEnvironment(),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: 'pipe',
     },
   )
+  child.stdin.end()
 
   let stdout = ''
   let stderr = ''
