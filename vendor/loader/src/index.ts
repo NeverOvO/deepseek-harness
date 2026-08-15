@@ -48,6 +48,12 @@ export namespace Loader {
   export interface Config {
     /** Base URL used to resolve relative plugin specifiers and config paths. */
     baseUrl?: string
+    /**
+     * First-priority base for host-owned bare plugin specifiers. Tree carriers
+     * may use this before their own composition/profile base, while still
+     * resolving relative specifiers beside the config that declared them.
+     */
+    preferredBareModuleBaseUrl?: string
   }
 
   /** Intercept config used when other plugins depend on `loader`. */
