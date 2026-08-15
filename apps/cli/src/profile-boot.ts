@@ -26,6 +26,7 @@ import {
   loadOverlayPatches,
   loadProfile,
   PROFILE_PATCH_FILENAME,
+  PROFILES_DIR,
   watchUserPatches,
   type Profile,
 } from '@deepseek-ai/dsh-app-boot'
@@ -243,12 +244,14 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     ...loadOptionalPatches(NAME, homePatchPath()) ?? [],
     ...composed.overlays,
   ])
-  // Profile module resolution is installation-first: shipped rows must use the
-  // same package graph as this running `dsh`, even when a long-lived profile
-  // node_modules still contains an older copy. app-boot falls back to the
-  // profile base only when the exact bare specifier is absent from the current
-  // installation, preserving third-party profile plugins.
-  const installModuleBaseUrl = pathToFileURL(INSTALL_ANCHOR).href
+  // `prepareProfile()` healed this flat directory from the running dsh
+  // dependency CLOSURE. Anchor host-first resolution at its parent so every
+  // in-box plugin (not only direct CLI dependencies) is found there before a
+  // stale profile-local copy; app-boot still falls back to the profile when
+  // the exact bare specifier is absent from the installation closure.
+  const installModuleBaseUrl = pathToFileURL(
+    join(resolveDshHome(), PROFILES_DIR, '__dsh-installation-anchor__.mjs'),
+  ).href
   // Cloned for the same insert-aliasing reason as composeLive: the boot
   // application must not mutate the objects later reloads recompose from.
   const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
