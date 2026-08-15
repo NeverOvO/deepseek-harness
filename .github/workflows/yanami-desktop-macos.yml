@@ -1,0 +1,79 @@
+name: Yanami Desktop macOS
+
+on:
+  push:
+    branches: [feat/yanami-workbench-ui]
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/web/**'
+      - 'apps/cli/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/yanami-desktop-macos.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: yanami-desktop-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  macos-build:
+    name: macOS / build and package
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      # The desktop workspace is new on this feature branch, so its Electron
+      # and Forge importers are not yet present in the checked-in lockfile.
+      # First validation intentionally resolves them; the resulting lockfile is
+      # uploaded below so it can be reviewed and committed after the lane is green.
+      - name: Install workspace dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Upload resolved lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: yanami-desktop-pnpm-lock
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+
+      - name: Build DSH runtime and Web frontend
+        run: pnpm run build
+
+      - name: Run desktop runtime unit tests
+        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts
+
+      - name: Compile desktop main process
+        run: pnpm --filter @deepseek-ai/dsh-desktop run build
+
+      - name: Package macOS application
+        run: pnpm --filter @deepseek-ai/dsh-desktop run make:mac
+
+      - name: Inspect packaged application
+        run: |
+          find apps/desktop/out -maxdepth 5 -type d -name '*.app' -print
+          test -n "$(find apps/desktop/out -maxdepth 5 -type d -name '*.app' -print -quit)"
+
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: yanami-workbench-macos-unsigned
+          path: apps/desktop/out/make/**
+          if-no-files-found: error
