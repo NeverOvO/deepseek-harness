@@ -4,6 +4,7 @@ import { resolveSlotLabel, type BoundActions } from '@deepseek-ai/dsh-client-ui-
 import {
   resolveWorkspacePath, type ISessions, type SessionId,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -45,6 +46,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** The conversation skeleton, chat flow, commands, details, and docks copy. */
     conversation: ConversationKey
   }
+}
+
+/** Workbench-only extension injected into the resident conversation shell. */
+interface YanamiConversationInjected {
+  /** Execute a real durable mode selection against the current session. */
+  switchYanamiMode: ((mode: YanamiMode) => Promise<boolean>) | undefined
 }
 
 /** Services required by the conversation plugin. */
@@ -209,7 +216,7 @@ export function apply(ctx: Context): void {
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
     },
-    inject: (sessionId: SessionId | undefined): ConversationInjected => ({
+    inject: (sessionId: SessionId | undefined): ConversationInjected & YanamiConversationInjected => ({
       hooks: { composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId) },
       selectWorkspace: async (workspaceId) => {
         const nextId = await workspaces.connectWorkspace(workspaceId)
@@ -230,6 +237,14 @@ export function apply(ctx: Context): void {
         }
         sessions.open(nextId)
       },
+      switchYanamiMode: sessionId === undefined
+        ? undefined
+        : async (mode) => {
+          const session = sessions.binding(sessionId)?.session
+          if (session === undefined) return false
+          const result = await session.command(`/mode ${mode}`)
+          return result.ok && result.value.matched
+        },
     }),
   }, ConversationRoot)
 
