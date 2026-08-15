@@ -75,6 +75,9 @@ async function mount(): Promise<Bench> {
   }
   ctx.reflect.provide('connection', handle)
   ctx.reflect.provide('remote.commands', fakeRemote().commands)
+  // Project Memory is part of the runtime's required Remote assembly even
+  // though this spec only exercises the forwarded-event carrier.
+  ctx.reflect.provide('remote.projectMemory', {} as never)
   await ctx.plugin(RuntimeClient).await()
   return bench
 }
