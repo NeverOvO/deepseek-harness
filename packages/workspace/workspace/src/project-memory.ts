@@ -8,9 +8,22 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { DomainChanged, KvTable } from '@deepseek-ai/dsh-storage-domain'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 import type { WorkspaceId } from './types.ts'
 import type { WorkspaceRegistry } from './index.ts'
+import type {
+  ProjectMemoryClearRequest,
+  ProjectMemoryClearResult,
+  ProjectMemoryGetRequest,
+  ProjectMemoryReadResult,
+  ProjectMemoryReadValue,
+  ProjectMemoryRejected,
+  ProjectMemoryReplaceRequest,
+  ProjectMemorySetSectionRequest,
+  ProjectMemorySuccess,
+  ProjectMemoryView,
+} from './project-memory-types.ts'
 
 /** Stable section order used by persistence, UI projections, and prompt assembly. */
 export const projectMemorySectionNames = [
@@ -143,6 +156,38 @@ function normalizeSectionText(text: string): string {
   return text.trim().length === 0 ? '' : text
 }
 
+/** Freeze one host memory snapshot before it crosses the typed Remote boundary. */
+function remoteSnapshot(memory: ProjectMemory): ProjectMemoryView {
+  return Object.freeze({
+    workspaceId: memory.workspaceId,
+    sections: Object.freeze({
+      architecture: memory.sections.architecture,
+      commands: memory.sections.commands,
+      conventions: memory.sections.conventions,
+      decisions: memory.sections.decisions,
+      knownIssues: memory.sections.knownIssues,
+      definitionOfDone: memory.sections.definitionOfDone,
+    }),
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
+  })
+}
+
+function remoteReadValue(memory: ProjectMemory | undefined): ProjectMemoryReadValue {
+  return Object.freeze({ memory: memory === undefined ? null : remoteSnapshot(memory) })
+}
+
+function remoteSuccess<T>(value: T): ProjectMemorySuccess<T> {
+  return Object.freeze({ ok: true, value })
+}
+
+function remoteWorkspaceMissing(workspaceId: WorkspaceId): ProjectMemoryRejected {
+  return Object.freeze({
+    ok: false,
+    error: Object.freeze({ code: 'workspace-not-found', workspaceId }),
+  })
+}
+
 /**
  * Render the model-facing Project Memory snapshot. Empty sections are omitted
  * to avoid wasting context tokens while the canonical section order remains stable.
@@ -171,10 +216,12 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * Host-side Project Memory storage service. It owns only its sidecar domain;
- * Workspace Core remains authoritative for workspace identity and lifecycle.
+ * Host-side Project Memory storage service and typed Remote owner. It owns only
+ * its sidecar domain; Workspace Core remains authoritative for workspace identity
+ * and lifecycle. Remote methods are thin wrappers over the same durable methods,
+ * so the browser never gains a second persistence path.
  */
-export class ProjectMemoryService extends Service {
+export class ProjectMemoryService extends TypertRemoteService {
   static inject = ['storageDomain', 'workspaceRegistry']
 
   private table?: KvTable<WorkspaceId, ProjectMemoryRecord>
@@ -321,6 +368,54 @@ export class ProjectMemoryService extends Service {
    */
   clear(workspaceId: WorkspaceId): Promise<boolean> {
     return this.enqueue(async () => await this.requireTable().delete(workspaceId))
+  }
+
+  /** Read the sidecar through the generated `projectMemory.get` Remote method. */
+  @Remote('get')
+  async remoteGet(request: ProjectMemoryGetRequest): Promise<ProjectMemoryReadResult> {
+    if (this.ctx.workspaceRegistry.get(request.workspaceId) === undefined) {
+      return remoteWorkspaceMissing(request.workspaceId)
+    }
+    return remoteSuccess(remoteReadValue(this.get(request.workspaceId)))
+  }
+
+  /** Replace one section through the generated `projectMemory.setSection` Remote method. */
+  @Remote('setSection')
+  async remoteSetSection(request: ProjectMemorySetSectionRequest): Promise<ProjectMemoryReadResult> {
+    try {
+      return remoteSuccess(remoteReadValue(await this.setSection(
+        request.workspaceId,
+        request.section,
+        request.text,
+      )))
+    } catch (error: unknown) {
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) {
+        return remoteWorkspaceMissing(error.workspaceId)
+      }
+      throw error
+    }
+  }
+
+  /** Atomically replace all six sections through `projectMemory.replace`. */
+  @Remote('replace')
+  async remoteReplace(request: ProjectMemoryReplaceRequest): Promise<ProjectMemoryReadResult> {
+    try {
+      return remoteSuccess(remoteReadValue(await this.replace(request.workspaceId, request.sections)))
+    } catch (error: unknown) {
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) {
+        return remoteWorkspaceMissing(error.workspaceId)
+      }
+      throw error
+    }
+  }
+
+  /** Clear the sidecar through `projectMemory.clear`, only for a registered Workspace. */
+  @Remote('clear')
+  async remoteClear(request: ProjectMemoryClearRequest): Promise<ProjectMemoryClearResult> {
+    if (this.ctx.workspaceRegistry.get(request.workspaceId) === undefined) {
+      return remoteWorkspaceMissing(request.workspaceId)
+    }
+    return remoteSuccess(Object.freeze({ cleared: await this.clear(request.workspaceId) }))
   }
 
   private assertKnownWorkspace(workspaceId: WorkspaceId): void {
