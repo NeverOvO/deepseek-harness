@@ -1,7 +1,7 @@
 import { spawn, execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -105,6 +105,39 @@ async function preparePortableApp() {
   }
 }
 
+/**
+ * Ask the bundled standard Node runtime to resolve DSH from the deployed app.
+ * This deliberately mirrors normal package resolution instead of assuming a
+ * physical pnpm node_modules layout, which may contain links or a virtual store.
+ */
+async function resolveDshEntry(node, applicationRoot) {
+  const resolver = [
+    "const { createRequire } = require('node:module')",
+    "const { dirname, join } = require('node:path')",
+    "const root = process.env.YANAMI_APP_ROOT",
+    "if (!root) throw new Error('YANAMI_APP_ROOT is missing')",
+    "const requireFromApp = createRequire(join(root, 'package.json'))",
+    "const manifest = requireFromApp.resolve('@deepseek-ai/dsh/package.json')",
+    "process.stdout.write(join(dirname(manifest), 'lib', 'bin.js'))",
+  ].join(';')
+
+  const { stdout, stderr } = await execFileAsync(node, ['-e', resolver], {
+    cwd: applicationRoot,
+    env: {
+      ...process.env,
+      YANAMI_APP_ROOT: applicationRoot,
+    },
+    maxBuffer: 8 * 1024 * 1024,
+  })
+  if (stderr !== '') process.stderr.write(stderr)
+  const entry = stdout.trim()
+  if (entry === '' || !existsSync(entry)) {
+    throw new Error(`Node resolved an invalid packaged DSH CLI path: ${entry || '<empty>'}`)
+  }
+  console.log(`[desktop] resolved packaged DSH CLI: ${entry}`)
+  return entry
+}
+
 async function stopChild(child) {
   if (child.exitCode !== null || child.killed) return
   await new Promise(resolve => {
@@ -126,18 +159,18 @@ async function stopChild(child) {
 
 async function smokePackagedRuntime(appPath) {
   const resources = join(appPath, 'Contents', 'Resources')
+  const applicationRoot = join(resources, 'app')
   const node = join(resources, 'node-runtime', 'bin', 'node')
-  const dshEntry = join(resources, 'app', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   if (!existsSync(node)) throw new Error(`Packaged Node sidecar missing: ${node}`)
-  if (!existsSync(dshEntry)) throw new Error(`Packaged DSH CLI missing: ${dshEntry}`)
 
   const smokeHome = join(stageRoot, 'smoke-home')
   await mkdir(smokeHome, { recursive: true })
   await run(node, ['--version'])
+  const dshEntry = await resolveDshEntry(node, applicationRoot)
 
   console.log('[desktop] smoke-starting packaged DSH runtime')
   const child = spawn(node, [dshEntry, 'web', '--host', '127.0.0.1', '--port', '0'], {
-    cwd: join(resources, 'app'),
+    cwd: applicationRoot,
     env: {
       ...process.env,
       DSH_HOME: smokeHome,
