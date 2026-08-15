@@ -256,6 +256,11 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // application must not mutate the objects later reloads recompose from.
   const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
     app.current = hostCtx
+    // Publish the same installation-first bare-module anchor on Loader config
+    // before any row mounts. Direct preset subtrees are not children of the
+    // root Include, so they need this explicit host fact to avoid resolving
+    // an in-box package from a stale profile-local node_modules first.
+    hostCtx.loader.config.preferredBareModuleBaseUrl = installModuleBaseUrl
     // Before any config-tree entry mounts, so plugins resolve all launch-time
     // environment values from the same immutable provenance snapshot.
     hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
