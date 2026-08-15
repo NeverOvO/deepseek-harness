@@ -18,7 +18,7 @@ access 是每条发布序列的属性,不是整个 scope 的属性:
 |---|---|---|
 | vendored 框架 | `vendor/*` 九包 | `public` |
 | native | `native/landlock-run/packages/*` 三包 | `public` |
-| dsh | `packages/*/*` + `apps/*`(221 个成员) | `restricted` |
+| dsh | `packages/*/*` + `apps/cli` + `apps/web` | `restricted` |
 
 `check-workspace-constraints.ts` 按各自序列的级别校验每个 manifest,这是阻止 scope 漂移的那道闸:新增的 `vendor/*` 包留在 `restricted`、或某个 dsh 成员被改成 `public`,都会让 workspace 约束失败。
 

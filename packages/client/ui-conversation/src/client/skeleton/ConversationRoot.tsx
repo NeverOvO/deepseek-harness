@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { GoalProjection } from '@deepseek-ai/dsh-goal/client'
 import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { HeroGlow, HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
@@ -32,7 +31,7 @@ export function ConversationRoot({
   const sessionCount = useSessions(s => Object.keys(s.byId).length)
   const workspaces = useWorkspaces(s => s)
   const yanamiMode = useProjection('yanamiMode')
-  const goal = useProjection('goal') as GoalProjection | null | undefined
+  const goal = useProjection('goal')
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
@@ -186,13 +185,13 @@ export function ConversationRoot({
       {hero && (
         <HeroShell
           t={t}
-          cwd={cwd}
           sessionCount={sessionCount}
-          activeMode={yanamiMode?.mode}
-          switchingMode={switchingMode}
-          modeError={modeError}
-          onModeSelect={switchYanamiMode === undefined ? undefined : chooseMode}
-          mission={goal}
+          {...cwd === undefined ? {} : { cwd }}
+          {...yanamiMode?.mode === undefined ? {} : { activeMode: yanamiMode.mode }}
+          {...switchingMode === undefined ? {} : { switchingMode }}
+          {...modeError === undefined ? {} : { modeError }}
+          {...switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
+          {...goal === undefined ? {} : { mission: goal }}
         />
       )}
       {hero && heroWorkspaceRow}

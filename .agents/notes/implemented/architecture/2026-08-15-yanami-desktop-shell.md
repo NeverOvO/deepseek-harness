@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-15-yanami-desktop-shell.zh.md)
+
 ## Problem
 
 Yanami Workbench is intended to become a daily desktop work environment rather than a browser tab that the user must start from a terminal. Reimplementing the DeepSeek Harness agent runtime in another desktop framework would duplicate Goal, Workflow, Jobs, Session, Workspace, tools, approval, and persistence behavior, while continuing to expose `dsh web` directly would keep installation and lifecycle management as user-facing concerns.
@@ -19,6 +21,8 @@ The child boots the Web profile with `--host 127.0.0.1 --port 0`. The desktop sh
 The renderer remains unprivileged: Node integration is disabled, context isolation and sandboxing are enabled, navigation is restricted to the active runtime origin, and a preload exposes only a small read-only desktop identity object. Ordinary HTTP(S) links are delegated to the operating system browser rather than opening additional Electron windows.
 
 macOS is the first packaging target. Electron Forge owns `.app`/DMG packaging, while the main-process and runtime-supervisor code stays platform-neutral so Windows can add its maker, icons, signing, and lifecycle verification without changing the runtime contract.
+
+The desktop shell remains a private workspace application. The shared workspace publication classification excludes the exact `apps/desktop` and `@deepseek-ai/dsh-desktop` pair from npm release discovery and npm application payload checks; CLI and Web remain npm release members. Desktop distribution comes from operating-system packaging rather than `npm publish`.
 
 The loopback Web carrier is a first desktop transport, not a permanent architectural requirement. DSH's connection layer already abstracts browser and in-process carriers, so a future desktop-specific IPC/in-process carrier may remove the private HTTP hop while preserving the Workbench UI and Harness runtime boundaries.
 

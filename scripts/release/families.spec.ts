@@ -1,6 +1,7 @@
 /** Release family discovery, publish order, tag naming, and the bump judgements. */
 
 import { describe, expect, it } from 'vitest'
+import { resolve } from 'node:path'
 import { releaseFamily, type ReleaseMember } from './families.ts'
 import { compareVersions, nextVendorVersion, reachesPayload } from './bump.ts'
 
@@ -16,6 +17,15 @@ function member(directory: string, name: string, manifest: Record<string, unknow
 }
 
 describe('release families', () => {
+  it('excludes the private desktop application while retaining npm applications', () => {
+    const members = releaseFamily('dsh').members(resolve(import.meta.dirname, '../..'))
+    const names = members.map(entry => entry.name)
+
+    expect(names).not.toContain('@deepseek-ai/dsh-desktop')
+    expect(names).toContain('@deepseek-ai/dsh')
+    expect(names).toContain('@deepseek-ai/dsh-web-frontend')
+  })
+
   it('names one tag for the whole dsh family and one per vendored package', () => {
     const dsh = releaseFamily('dsh')
     const vendor = releaseFamily('vendor')

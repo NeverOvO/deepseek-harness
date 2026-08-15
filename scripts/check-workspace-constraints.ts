@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
+import { classifyWorkspacePublication } from './workspace-publication.ts'
 
 const root = resolve(import.meta.dirname, '..')
 // vendor/* is single-level; packages/<group>/<pkg> nests one level deeper
@@ -47,9 +48,6 @@ const repositoryUrl = 'git+https://github.com/deepseek-harness/deepseek-harness.
  * their trusted publishing against the repository that runs the workflow.
  */
 const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harness.git'
-/** Directories whose packages this repository publishes: one release member each. */
-const releaseMemberDirectory = /^(?:packages\/[^/]+\/[^/]+|apps\/[^/]+|vendor\/[^/]+)$/
-
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh': ['lib/*.js', 'config'],
@@ -222,6 +220,7 @@ function usesEmittedTreeDefaults(manifest: PackageManifest): boolean {
 function checkWorkspace({ dir, manifest }: WorkspaceManifest): string[] {
   const errors: string[] = []
   const label = manifest.name ?? dir
+  const publicationClass = classifyWorkspacePublication(dir, manifest.name)
   const isLandlockPackageDir = dir.startsWith('native/landlock-run/packages/')
   const isPublicLandlockPackage = isLandlockPackageDir
     && manifest.name !== undefined
@@ -240,7 +239,7 @@ function checkWorkspace({ dir, manifest }: WorkspaceManifest): string[] {
       || manifest.repository.directory !== expectedDirectory) {
       errors.push(`${label}: published Landlock package repository must use ${repositoryUrl} with directory ${expectedDirectory} for trusted publishing`)
     }
-  } else if (releaseMemberDirectory.test(dir)) {
+  } else if (publicationClass === 'npm-release-member') {
     // Release members state that they are publishable: npm refuses a private
     // package, and the repository field is how a consumer finds the source of
     // the package it installed.
@@ -262,6 +261,13 @@ function checkWorkspace({ dir, manifest }: WorkspaceManifest): string[] {
       || manifest.repository.directory !== dir) {
       errors.push(`${label}: release member repository must use ${publishedRepositoryUrl} with directory ${dir}`)
     }
+  } else if (publicationClass === 'private-native-application') {
+    if (manifest.private !== true) {
+      errors.push(`${label}: private native application must set "private": true`)
+    }
+    if (manifest.publishConfig?.access !== undefined) {
+      errors.push(`${label}: private native application must not set publishConfig.access`)
+    }
   } else if (manifest.private !== true) {
     errors.push(`${label}: package.json must set "private": true`)
   }
@@ -279,7 +285,9 @@ function checkWorkspace({ dir, manifest }: WorkspaceManifest): string[] {
     }
   }
 
-  if (dir.startsWith('apps/') && manifest.name?.startsWith('@deepseek-ai/')) {
+  if (publicationClass === 'npm-release-member'
+    && dir.startsWith('apps/')
+    && manifest.name?.startsWith('@deepseek-ai/')) {
     const expectedFiles = appPackageFiles[manifest.name]
     if (expectedFiles === undefined) {
       errors.push(`${label}: app package has no publication files policy`)

@@ -51,7 +51,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Workbench-only extension injected into the resident conversation shell. */
 interface YanamiConversationInjected {
   /** Execute a real durable mode selection against the current session. */
-  switchYanamiMode: ((mode: YanamiMode) => Promise<boolean>) | undefined
+  switchYanamiMode?: (mode: YanamiMode) => Promise<boolean>
 }
 
 /** Services required by the conversation plugin. */
@@ -237,14 +237,14 @@ export function apply(ctx: Context): void {
         }
         sessions.open(nextId)
       },
-      switchYanamiMode: sessionId === undefined
-        ? undefined
-        : async (mode) => {
+      ...(sessionId === undefined
+        ? {}
+        : { switchYanamiMode: async (mode: YanamiMode) => {
           const session = sessions.binding(sessionId)?.session
           if (session === undefined) return false
           const result = await session.command(`/mode ${mode}`)
           return result.ok && result.value.matched
-        },
+        } }),
     }),
   }, ConversationRoot)
 

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-15-yanami-desktop-shell.md
-2026-08-15-yanami-desktop-shell.md: 7611f88689daf3aaf56a2f917b60050c3c580fbf
-2026-08-15-yanami-desktop-shell.zh.md: ec966cc3d630b979774cc477dd9a36a81e1c54fe
+2026-08-15-yanami-desktop-shell.md: 9db1a71a2e3bce31ce4a7f7eaffbd0364366fb39
+2026-08-15-yanami-desktop-shell.zh.md: 91625d0de1914291c65299d2c163f436c25892bd

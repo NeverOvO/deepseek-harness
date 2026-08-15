@@ -13,6 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConversationRootProps } from '../src/client/skeleton/ConversationRoot.tsx'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -99,12 +100,17 @@ function mount(
     composerBlock?: { reason: string }
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
+    /** Override the summary cwd; null omits the optional field entirely. */
+    summaryCwd?: string | null
+    /** Session-bound Yanami mode action supplied by the resident inject face. */
+    switchYanamiMode?: (mode: YanamiMode) => Promise<boolean>
   } = {},
 ) {
   const root = sid('root')
   const rootRow = { id: root, displayTitle: 'Root', running: false, blank: false, updatedAt: 1 }
   const childRow = {
-    id: SID, displayTitle: 'Child', parentId: root, cwd: '/projects/one',
+    id: SID, displayTitle: 'Child', parentId: root,
+    ...(options.summaryCwd === null ? {} : { cwd: options.summaryCwd ?? '/projects/one' }),
     running: false, blank: options.summaryBlank ?? false, updatedAt: 2,
     ...(options.summaryOrigin === undefined ? {} : { origin: options.summaryOrigin }),
   }
@@ -247,6 +253,7 @@ function mount(
     renderSlot,
     renderSlotChain,
     selectWorkspace: retargetWorkspace,
+    ...(options.switchYanamiMode === undefined ? {} : { switchYanamiMode: options.switchYanamiMode }),
     t,
   }
   const view = render(<ConversationRoot {...props} />)
@@ -258,14 +265,40 @@ function mount(
 }
 
 describe('Hero chrome', () => {
-  it('renders the English preview badge through the hero locale seat', () => {
+  it('renders the Yanami landing surface through the hero shell', () => {
     const view = render(<HeroShell t={makeTranslate(en, commonEn)} />)
-    expect(view.getByText('Into the Unknown')).toBeTruthy()
-    expect(view.getByText('Preview')).toBeTruthy()
+    expect(view.getByRole('heading', { name: '今天想先解决什么？' })).toBeTruthy()
+    expect(view.getByText('Mission Cockpit')).toBeTruthy()
   })
 })
 
 describe('ConversationRoot resident composer', () => {
+  it('preserves mode switching with a cwd and omits cwd when the summary has none', async () => {
+    const withCwdSwitch = vi.fn(async () => true)
+    const withCwd = mount(
+      conversationSnapshot({ composerPhase: 'blank', blank: true }),
+      undefined,
+      undefined,
+      { summaryBlank: true, switchYanamiMode: withCwdSwitch },
+    )
+    expect(withCwd.view.container.querySelector('strong[title="/projects/one"]')?.textContent).toBe('one')
+    fireEvent.click(withCwd.view.getByRole('button', { name: /Plan 计划模式/ }))
+    expect(withCwdSwitch).toHaveBeenCalledWith('plan')
+    withCwd.view.unmount()
+
+    const withoutCwdSwitch = vi.fn(async () => true)
+    const withoutCwd = mount(
+      conversationSnapshot({ composerPhase: 'blank', blank: true }),
+      undefined,
+      undefined,
+      { summaryBlank: true, summaryCwd: null, switchYanamiMode: withoutCwdSwitch },
+    )
+    expect(withoutCwd.view.getByText('选择工作区后载入')).toBeTruthy()
+    expect(withoutCwd.view.container.querySelector('strong[title]')).toBeNull()
+    fireEvent.click(withoutCwd.view.getByRole('button', { name: /Plan 计划模式/ }))
+    expect(withoutCwdSwitch).toHaveBeenCalledWith('plan')
+  })
+
   it('renders the composer inert with the blocker\u2019s own reason', () => {
     const b = mount(conversationSnapshot(), undefined, undefined, {
       composerBlock: { reason: 'select a model first' },
@@ -362,8 +395,8 @@ describe('ConversationRoot resident composer', () => {
     const header = b.view.container.querySelector('header')
     expect(host).not.toBeNull()
     expect(header?.getAttribute('aria-hidden')).toBe('true')
-    expect(b.view.getByText('探索未至之境')).toBeTruthy()
-    expect(b.view.getByText('预览版')).toBeTruthy()
+    expect(b.view.getByRole('heading', { name: '今天想先解决什么？' })).toBeTruthy()
+    expect(b.view.getByText('Mission Cockpit')).toBeTruthy()
     expect(b.view.queryByTestId('view-chat')).toBeNull()
     // The same machine-backed textarea is live in the hero, and the
     // persistence mirror stays bound (ConversationSession mounts chrome-hidden
@@ -411,7 +444,7 @@ describe('ConversationRoot resident composer', () => {
     // blank the column for the history round-trip.
     const root = b.view.container.querySelector('[data-phase]')
     expect(root?.getAttribute('data-phase')).toBe('hero')
-    expect(b.view.getByText('探索未至之境')).toBeTruthy()
+    expect(b.view.getByRole('heading', { name: '今天想先解决什么？' })).toBeTruthy()
     expect(b.view.getByRole('textbox')).toBeTruthy()
   })
 
@@ -475,7 +508,7 @@ describe('ConversationRoot resident composer', () => {
     await act(async () => { owner.onPick(wid('second')); await Promise.resolve() })
     expect(selectWorkspace).toHaveBeenCalledWith(wid('second'))
     expect(b.view.queryByText('Selected Folder')).toBeNull()
-    expect(b.view.getByText('one')).toBeTruthy()
+    expect(b.view.getByRole('button', { name: '选择工作区' }).textContent).toContain('one')
   })
 
   it('blank session keeps the interactive picker chip (workspace switchable until the first message)', () => {

@@ -19,6 +19,7 @@ import { SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope } from '@
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ISession, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   ChatViewInjected, ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
@@ -34,6 +35,9 @@ const ROOT = 'root-1' as SessionId
 
 type ChatInstance = ReturnType<ReturnType<typeof createChatStore>['create']>
 type ChatActions = ChatInstance['actions']
+type ResidentInjected = ConversationInjected & {
+  switchYanamiMode?: (mode: YanamiMode) => Promise<boolean>
+}
 
 /** ISession verb mocks, typed against the production face (['prompt'] etc. keep vitest mock ergonomics). */
 function sessionFakeFor() {
@@ -42,6 +46,7 @@ function sessionFakeFor() {
     loadOlder: vi.fn<ISession['loadOlder']>(() => Promise.resolve()),
     prompt: vi.fn<ISession['prompt']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
     cancel: vi.fn<ISession['cancel']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
+    command: vi.fn<ISession['command']>(() => Promise.resolve({ ok: true, value: { matched: true } })),
   } satisfies SessionBehaviorOverrides
 }
 
@@ -94,7 +99,7 @@ async function bench() {
   }
   const residentApi = (id: SessionId | undefined) => {
     const entry = entryOf('conversation')
-    return (entry.inject as unknown as (sessionId: SessionId | undefined) => ConversationInjected)(id)
+    return (entry.inject as unknown as (sessionId: SessionId | undefined) => ResidentInjected)(id)
   }
   const composerApi = (id: SessionId | undefined) => {
     const entry = entryOf('conversation.composer.bar')
@@ -129,6 +134,18 @@ async function bench() {
 }
 
 describe('conversation slot inject API', () => {
+  it('offers mode switching only for a bound session and preserves its command context', async () => {
+    const b = await bench()
+    const resident = b.residentApi(ROOT)
+    expect(resident).toHaveProperty('switchYanamiMode')
+    await expect(resident.switchYanamiMode?.('plan')).resolves.toBe(true)
+    expect(b.sessionFake.command).toHaveBeenCalledWith('/mode plan')
+
+    const noSession = b.residentApi(undefined)
+    expect(noSession).not.toHaveProperty('switchYanamiMode')
+    await b.runtime.dispose()
+  })
+
   it('assembles the thin API side-effect-free', async () => {
     const b = await bench()
     const { injected } = b.conversationApi(ROOT)

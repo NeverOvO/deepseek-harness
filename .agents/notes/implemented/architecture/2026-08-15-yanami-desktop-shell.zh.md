@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](2026-08-15-yanami-desktop-shell.md) | 中文
+
 ## Problem
 
 八奈见工作台的目标是成为日常使用的桌面工作环境，而不是一个需要用户先开终端、再打开浏览器标签页的 Web 页面。如果为了桌面化在另一套框架里重写 DeepSeek Harness 的 Agent Runtime，就会重复实现 Goal、Workflow、Jobs、Session、Workspace、工具、审批和持久化等能力；如果继续把 `dsh web` 直接暴露给用户，则安装和生命周期管理仍然是用户需要理解的事情。
@@ -19,6 +21,8 @@ v0.1 把构建后的 `@deepseek-ai/dsh` CLI 作为子进程运行。在源码 Ch
 Renderer 保持低权限：关闭 Node Integration，开启 Context Isolation 与 Sandbox，只允许导航到当前活动 Runtime Origin；Preload 当前只暴露一个只读的桌面身份对象。普通 HTTP(S) 链接交给系统默认浏览器打开，而不是新建 Electron Window。
 
 macOS 是第一打包目标。`.app`/DMG 由 Electron Forge 负责；Main Process 和 Runtime Supervisor 保持平台无关，因此后续 Windows 只需要增加对应 Maker、图标、签名和生命周期验证，不需要改变 Runtime Contract。
+
+桌面壳保持为私有 Workspace Application。共享的 Workspace Publication Classification 会把精确匹配的 `apps/desktop` 与 `@deepseek-ai/dsh-desktop` 从 npm Release Discovery 和 npm Application Payload Check 中排除；CLI 与 Web 仍是 npm Release Member。桌面应用通过操作系统打包分发，不通过 `npm publish` 分发。
 
 Loopback Web Carrier 是第一阶段桌面传输方式，而不是永久架构要求。DSH 的 Connection Layer 已经抽象了 Browser 与 In-process Carrier，因此未来可以增加 Electron IPC/In-process Carrier，去掉内部 HTTP 跳转，同时保留 Workbench UI 与 Harness Runtime 的边界。
 

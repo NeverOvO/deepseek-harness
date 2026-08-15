@@ -12,6 +12,7 @@
 import { globSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { validateTarballPayload } from '../publication-payload.ts'
+import { classifyWorkspacePublication } from '../workspace-publication.ts'
 
 /** Dependency sections that constrain publish order: a consumer must publish after its dependency. */
 const ORDER_SECTIONS = ['dependencies', 'optionalDependencies'] as const
@@ -92,12 +93,14 @@ export abstract class ReleaseFamily {
       const manifest = readManifest(resolve(root, manifestPath))
       const name = requireString(manifest, 'name', normalized)
       const version = requireString(manifest, 'version', normalized)
+      const directory = normalized.slice(0, normalized.length - '/package.json'.length)
       if (name === WORKSPACE_ROOT_PACKAGE) throw new Error(`${normalized} selected the workspace root`)
       if (!name.startsWith('@deepseek-ai/')) throw new Error(`${normalized} must name an @deepseek-ai package`)
+      if (classifyWorkspacePublication(directory, name) === 'private-native-application') continue
       if (seen.has(name)) throw new Error(`${name} appears twice in release family ${this.id}`)
       seen.add(name)
       members.push({
-        directory: normalized.slice(0, normalized.length - '/package.json'.length),
+        directory,
         name,
         version,
         manifest,

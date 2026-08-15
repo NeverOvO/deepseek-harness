@@ -18,7 +18,7 @@ Access is a property of each release sequence, not of the scope:
 |---|---|---|
 | vendored framework | the nine `vendor/*` packages | `public` |
 | native | the three `native/landlock-run/packages/*` packages | `public` |
-| dsh | `packages/*/*` + `apps/*` (221 members) | `restricted` |
+| dsh | `packages/*/*` + `apps/cli` + `apps/web` | `restricted` |
 
 `check-workspace-constraints.ts` holds every manifest to its own sequence's level, which is what stops the scope from drifting: a new `vendor/*` package left at `restricted`, or a dsh member flipped to `public`, fails the workspace constraints.
 

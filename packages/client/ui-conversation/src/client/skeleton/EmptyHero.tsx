@@ -103,13 +103,13 @@ export function HeroShell({
   return (
     <div className={css.root}>
       <YanamiHome
-        cwd={cwd}
-        sessionCount={sessionCount}
-        activeMode={activeMode}
-        switchingMode={switchingMode}
-        modeError={modeError}
-        onModeSelect={onModeSelect}
-        mission={mission}
+        {...cwd === undefined ? {} : { cwd }}
+        {...sessionCount === undefined ? {} : { sessionCount }}
+        {...activeMode === undefined ? {} : { activeMode }}
+        {...switchingMode === undefined ? {} : { switchingMode }}
+        {...modeError === undefined ? {} : { modeError }}
+        {...onModeSelect === undefined ? {} : { onModeSelect }}
+        {...mission === undefined ? {} : { mission }}
       />
       {children}
     </div>
