@@ -7,7 +7,7 @@ import {
   type DesktopRuntime,
 } from './runtime.ts'
 
-const APP_NAME = '八奈见工作台'
+const APP_NAME = '云屿来工作台'
 const DEFAULT_WIDTH = 1440
 const DEFAULT_HEIGHT = 920
 const MIN_WIDTH = 1080
@@ -129,7 +129,7 @@ async function hydrateWindow(window: BrowserWindow): Promise<void> {
     if (!window.isDestroyed()) {
       dialog.showErrorBox(
         'DSH Runtime 已停止',
-        '八奈见工作台的执行引擎意外退出。关闭并重新打开窗口可重新启动 Runtime。',
+        '云屿来工作台的执行引擎意外退出。关闭并重新打开窗口可重新启动 Runtime。',
       )
     }
   })
