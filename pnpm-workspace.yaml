@@ -20,6 +20,13 @@ packages:
   # closure is what the exe bundles and what the Python runtime distributes.
   - python/sdk-runtime
 
+# Electron Forge's reviewed desktop-only dependency graph currently reaches
+# @electron/node-gyp through a git source. Keep pnpm's default exotic-subdep
+# block everywhere else; only the desktop workspace may resolve that graph.
+packageConfigs:
+  '@deepseek-ai/dsh-desktop':
+    blockExoticSubdeps: false
+
 # Vendored framework packages keep their upstream semver ranges, while local
 # builds must resolve those matching names to this workspace's pinned sources.
 linkWorkspacePackages: true
@@ -40,6 +47,9 @@ peerDependencyRules:
 allowBuilds:
   esbuild: true
   lefthook: true
+  # Electron's install script downloads the platform binary used by the desktop
+  # shell. It is pinned in apps/desktop/package.json and required for dev/package.
+  electron: true
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
   node-pty: true
   # Pulled in by @earendil-works/pi-ai (optional LLM API backend). pnpm lists
