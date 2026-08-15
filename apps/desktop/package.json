@@ -1,10 +1,17 @@
 {
-  "name": "@yunyulai/yanami-workbench-desktop",
+  "name": "@deepseek-ai/dsh-desktop",
+  "productName": "八奈见工作台",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "lib/main.js",
   "description": "Yanami Workbench desktop shell over the DeepSeek Harness runtime",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "apps/desktop"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "electron .",
