@@ -8,6 +8,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
+import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -103,17 +104,54 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
   })
 }
 
-/** Narrow test seams for the two safety decisions this module owns. */
-export const internals = Object.freeze({ workspaceForSession, proposalTool, proposalPolicy: PROPOSAL_POLICY })
+/**
+ * Forward durable candidate-domain changes as workspace-scoped invalidation
+ * hints. The id→Workspace map is seeded from persisted candidates at boot so a
+ * delete after restart still identifies its owner even though domain delete
+ * tombstones intentionally carry no old value.
+ */
+function installCandidateChangeBridge(ctx: Context): void {
+  const owners = new Map<string, WorkspaceId>()
+  for (const workspace of ctx.workspaceRegistry.list()) {
+    for (const candidate of ctx.projectMemory.candidates(workspace.id)) {
+      owners.set(candidate.id, workspace.id)
+    }
+  }
+
+  ctx.on('domain/changed', (change: DomainChanged) => {
+    if (change.domain !== 'project_memory_candidates' || change.table !== 'candidates') return
+    let workspaceId: WorkspaceId | undefined
+    if (change.operation === 'put') {
+      const value = change.value as { readonly workspaceId?: unknown }
+      if (typeof value.workspaceId !== 'string') return
+      workspaceId = value.workspaceId as WorkspaceId
+      owners.set(change.key, workspaceId)
+    } else {
+      workspaceId = owners.get(change.key)
+      owners.delete(change.key)
+    }
+    if (workspaceId !== undefined) ctx.emit('project-memory/candidates-changed', workspaceId)
+  })
+}
+
+/** Narrow test seams for the safety decisions this module owns. */
+export const internals = Object.freeze({
+  workspaceForSession,
+  proposalTool,
+  proposalPolicy: PROPOSAL_POLICY,
+})
 
 /**
  * Register the proposal tool and its policy into each eligible Agent scope before
  * the first session-start/model request. Sessions outside registered Workspaces
- * receive neither. A cwd match is used as the creation-time fallback because the
+ * receive neither. The same host scope also forwards candidate-domain changes
+ * to browser consumers, so model-originated proposals update review UI without
+ * polling. A cwd match is used as the creation-time fallback because the
  * Workspace session-id attachment may settle immediately after Agent publication.
  */
 export function installProjectMemoryProposalTool(ctx: Context): void {
   ctx.inject(['workspaceRegistry', 'projectMemory'], (memoryCtx) => {
+    installCandidateChangeBridge(memoryCtx)
     memoryCtx.on('agent/created', ({ agent }) => {
       const workspace = workspaceForSession(memoryCtx, agent.id, agent.session.header.cwd)
       if (workspace === undefined) return
