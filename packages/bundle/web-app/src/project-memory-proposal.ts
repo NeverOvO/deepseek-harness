@@ -28,6 +28,12 @@ const SECTION_NAMES = [
 ] as const satisfies readonly ProjectMemorySection[]
 
 const MAX_CANDIDATE_CHARS = 8_000
+const MAX_PENDING_CANDIDATES = 100
+const SENSITIVE_PATTERNS = [
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/u,
+  /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16})\b/u,
+  /\b(?:password|passwd|secret|token|api[_ -]?key|密码|密钥|令牌)\s*[:=]\s*["']?[^\s"']{8,}/iu,
+] as const
 
 const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Do not stage transient progress, temporary observations, unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
 
@@ -40,6 +46,11 @@ function workspaceForSession(
   const workspaces = ctx.workspaceRegistry.list()
   return workspaces.find(workspace => workspace.sessionIds.some(id => id === sessionId))
     ?? (cwd === undefined ? undefined : workspaces.find(workspace => workspace.path === cwd))
+}
+
+/** Reject obvious credential-bearing text before it can enter durable candidate storage. */
+function containsSensitiveText(text: string): boolean {
+  return SENSITIVE_PATTERNS.some(pattern => pattern.test(text))
 }
 
 /**
@@ -88,11 +99,17 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
       if (text.length > MAX_CANDIDATE_CHARS) {
         throw new Error(`Project Memory candidate text exceeds ${String(MAX_CANDIDATE_CHARS)} characters`)
       }
+      if (containsSensitiveText(text)) {
+        throw new Error('Project Memory candidate looks like it contains a credential or secret')
+      }
+      if (ctx.projectMemory.candidates(workspaceId).length >= MAX_PENDING_CANDIDATES) {
+        throw new Error(`Project Memory already has ${String(MAX_PENDING_CANDIDATES)} candidates pending review`)
+      }
       const candidate = await ctx.projectMemory.proposeCandidate(
         workspaceId,
         args.section,
         text,
-        'session',
+        'automatic',
         sessionId,
       )
       return {
@@ -140,6 +157,7 @@ export const internals = Object.freeze({
   proposalTool,
   proposalPolicy: PROPOSAL_POLICY,
   installCandidateChangeBridge,
+  containsSensitiveText,
 })
 
 /**
