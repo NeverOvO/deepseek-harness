@@ -1,10 +1,12 @@
 {
   "id": "/",
-  "name": "DeepSeek Harness",
-  "short_name": "DSH",
+  "name": "八奈见工作台",
+  "short_name": "八奈见",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
+  "theme_color": "#f6fbff",
+  "background_color": "#f6fbff",
   "icons": [
     {
       "src": "/favicon.svg",
