@@ -191,8 +191,8 @@ describe('ProjectMemoryHeaderAction', () => {
     await waitFor(() => {
       expect((screen.getByLabelText('决策') as HTMLTextAreaElement).value)
         .toBe('WorkspaceId 作为稳定主键')
+      expect(screen.queryByRole('button', { name: '采纳' })).toBeNull()
     })
-    expect(screen.queryByText('WorkspaceId 作为稳定主键')).not.toBeNull()
     expect(candidateCalls).toEqual(['propose', 'accept'])
   })
 })
