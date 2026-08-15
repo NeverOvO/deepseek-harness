@@ -50,6 +50,9 @@ describe('Project Memory proposal safety boundary', () => {
     expect(JSON.stringify(tool.parameters)).not.toContain('workspaceId')
     expect(tool.description).toContain('human review')
     expect(tool.description).toContain('never commits Project Memory')
+    expect(internals.proposalPolicy).toContain('NEW durable project-wide fact')
+    expect(internals.proposalPolicy).toContain('secrets, credentials, personal data')
+    expect(internals.proposalPolicy).toContain('pending human review')
 
     await expect(tool.execute({
       section: 'decisions',
