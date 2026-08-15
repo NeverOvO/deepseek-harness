@@ -30,12 +30,17 @@
       "types": "./lib/types/client.d.ts",
       "default": "./lib/types/client.js"
     },
+    "./yanami": {
+      "types": "./lib/types/yanami.d.ts",
+      "default": "./lib/yanami.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
     "lib/invariant.js",
+    "lib/yanami.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
