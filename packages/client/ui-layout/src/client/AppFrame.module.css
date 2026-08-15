@@ -61,7 +61,7 @@
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
   border-right: 1px solid var(--dsw-alias-yanami-glass-border);
-  box-shadow: 10px 0 34px rgba(70, 117, 157, 0.05);
+  box-shadow: var(--dsw-alias-yanami-card-shadow);
 }
 
 .centerCol {
@@ -75,7 +75,7 @@
   overflow: hidden;
   background: var(--dsw-alias-yanami-glass-fill-strong);
   border-left: 1px solid var(--dsw-alias-yanami-glass-border);
-  box-shadow: -10px 0 34px rgba(70, 117, 157, 0.04);
+  box-shadow: var(--dsw-alias-yanami-card-shadow);
 }
 
 /* The details subtree stays mounted at zero width, so its border must not paint
