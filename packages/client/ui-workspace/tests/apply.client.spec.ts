@@ -4,9 +4,12 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
-import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type {
+  ProjectMemoryHeaderInjected, WorkspaceBrowserInjected, WorkspacePickerInjected,
+} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
+import { ProjectMemoryHeaderAction } from '../src/client/project-memory/ProjectMemoryHeaderAction.tsx'
 
 // The service reads its initial locale from the browser; these specs assert
 // the shipped Chinese copy, so they state the browser they assume.
@@ -32,46 +35,84 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
+  const workspaceListListeners = new Set<() => void>()
+  const workspaceList = {
+    getSnapshot: () => ({
+      phase: 'ready',
+      items: [{
+        workspaceId: 'ws' as never,
+        path: '/projects/ws',
+        title: 'Workspace',
+        sessionIds: ['session' as never],
+        createdAt: '0',
+        updatedAt: '0',
+      }],
+      archivedSessionIds: [],
+    }),
+    subscribe: (listener: () => void) => {
+      workspaceListListeners.add(listener)
+      return () => { workspaceListListeners.delete(listener) }
+    },
+  }
+  const controller = { marker: 'project-memory-controller' }
+  const controllerFor = vi.fn(() => controller)
   ctx.provide('workspaces', {
-    create, startSession, rename, insertSessionBefore,
+    create, startSession, rename, insertSessionBefore, list: workspaceList,
   } as never)
+  ctx.provide('projectMemories', { forWorkspace: controllerFor } as never)
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, startSession, rename,
     insertSessionBefore, open, clear, search, renameSession, binding, fork,
+    controller, controllerFor,
   }
 }
 
 type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace'
 
-/** Declare any subset of the holes with a single root registration ('root' is a single slot). */
+/** Declare any subset of the root holes with one root registration. */
 function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
   const children = Object.fromEntries(names.map(name => [name, { kind: 'single', scope: 'root' }]))
   return slots.register({ name: 'root', children } as never, () => null)
 }
 
+/** Declare the additive per-session header action seat owned by ui-conversation. */
+function declareHeaderActions(slots: SlotRegistry): () => void {
+  return slots.register({
+    name: 'header-owner',
+    children: {
+      'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+    },
+  } as never, () => null)
+}
+
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale'])
+    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'projectMemories', 'locale'])
   })
 
-  it('registers browser and pickers for declarations arriving before or after apply', async () => {
+  it('registers browser, picker, and Project Memory action for declarations arriving before or after apply', async () => {
     const before = await bench()
     declare(before.slots, 'sidebar.workspaces')
+    declareHeaderActions(before.slots)
     await before.ctx.plugin({ inject: [...inject], apply }).await()
     expect(before.slots.entries('sidebar.workspaces')[0]!.component).toBe(WorkspaceBrowser)
+    expect(before.slots.entries('conversation.session.header.actions')[0]!.component).toBe(ProjectMemoryHeaderAction)
     // Copy rides the standard locale seat: the entry declares the namespace
     // and apply registered both dictionaries.
     expect(before.slots.entries('sidebar.workspaces')[0]!.locale).toBe('workspace')
     expect(before.locale.bind('workspace')('session.new')).toBe('新会话')
+    expect(before.locale.bind('workspace')('memory.action')).toBe('项目记忆')
 
     const after = await bench()
     await after.ctx.plugin({ inject: [...inject], apply }).await()
     declare(after.slots, 'conversation.hero.workspace', 'conversation.empty.workspace')
+    declareHeaderActions(after.slots)
     await Promise.resolve()
     expect(after.slots.entries('conversation.hero.workspace')[0]!.component).toBe(WorkspacePicker)
+    expect(after.slots.entries('conversation.session.header.actions')[0]!.component).toBe(ProjectMemoryHeaderAction)
     // expect(after.slots.entries('conversation.empty.workspace')[0]!.component).toBe(WorkspacePicker)
   })
 
@@ -115,6 +156,24 @@ describe('ui-workspace apply', () => {
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
   })
 
+  it('derives the Project Memory action from the Session Workspace account', async () => {
+    const b = await bench()
+    declareHeaderActions(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const entry = b.slots.entries('conversation.session.header.actions')[0]!
+    const injected = (entry.inject as (sessionId: string) => ProjectMemoryHeaderInjected)('session')
+
+    expect(injected.hooks.projectWorkspace.getSnapshot()).toMatchObject({
+      workspaceId: 'ws',
+      title: 'Workspace',
+    })
+    expect(injected.controllerFor('ws' as never)).toBe(b.controller)
+    expect(b.controllerFor).toHaveBeenCalledWith('ws')
+
+    const ungrouped = (entry.inject as (sessionId: string) => ProjectMemoryHeaderInjected)('ungrouped')
+    expect(ungrouped.hooks.projectWorkspace.getSnapshot()).toBeNull()
+  })
+
   it('declares the two directory-flow holes and reports their occupancy per surface', async () => {
     const b = await bench()
     declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
@@ -156,11 +215,13 @@ describe('ui-workspace apply', () => {
   it('unregisters every entry on teardown', async () => {
     const b = await bench()
     declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'conversation.empty.workspace')
+    declareHeaderActions(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     await fiber.dispose()
     expect(b.slots.entries('sidebar.workspaces')).toHaveLength(0)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(0)
+    expect(b.slots.entries('conversation.session.header.actions')).toHaveLength(0)
     // expect(b.slots.entries('conversation.empty.workspace')).toHaveLength(0)
   })
 })
