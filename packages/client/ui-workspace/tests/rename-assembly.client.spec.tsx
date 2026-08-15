@@ -34,6 +34,12 @@ async function createRuntime(): Promise<SlotTestRuntime> {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  // ui-workspace now has Project Memory as a required Workbench service. The
+  // rename assembly never opens that action, so fail loud if it unexpectedly
+  // tries to resolve a controller while still satisfying the real inject set.
+  runtime.provide('projectMemories', {
+    forWorkspace: () => { throw new Error('unexpected Project Memory access in rename assembly') },
+  } as never)
   return runtime
 }
 
