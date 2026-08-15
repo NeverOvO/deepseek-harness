@@ -187,7 +187,7 @@ function ProjectMemoryEditor({
                 className={css.select}
                 value={candidateSection}
                 disabled={candidateBusy !== null}
-                aria-label={t(SECTION_ROWS.find(row => row.key === candidateSection)?.label ?? 'memory.section.decisions')}
+                aria-label={t('memory.candidates.title')}
                 onChange={(event) => { setCandidateSection(event.target.value as SectionKey) }}
               >
                 {SECTION_ROWS.map(({ key, label }) => (
