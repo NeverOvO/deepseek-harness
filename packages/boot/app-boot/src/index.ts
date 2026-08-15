@@ -473,12 +473,38 @@ function groupedDump(
 }
 
 /**
+ * Return whether an exact bare specifier resolves from the preferred host
+ * anchor. A missing package is the only fallback case: export-map errors or
+ * other resolution failures belong to the host package that was found and
+ * must stay fail-loud rather than silently switching package versions.
+ */
+function resolvesFromBareModuleBase(
+  internal: NonNullable<Loader['internal']>,
+  specifier: string,
+  bareModuleBaseUrl: string,
+): boolean {
+  try {
+    if (internal.version === 'v2') {
+      internal.resolveSync(bareModuleBaseUrl, { specifier })
+    } else {
+      internal.resolveSync(specifier, bareModuleBaseUrl, {})
+    }
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | null)?.code === 'ERR_MODULE_NOT_FOUND') return false
+    throw error
+  }
+}
+
+/**
  * Mount and remember the exact root Include entry used by app boot and user patch-layer HMR.
  * @param ctx - context carrying an initialized Loader service.
  * @param absoluteConfigPath - absolute YAML or JSON configuration path.
  * @param patches - initial app and user patches, applied in order.
- * @param bareModuleBaseUrl - optional installed-host base for bare package
- * names; relative names continue to resolve beside the configuration file.
+ * @param bareModuleBaseUrl - optional first-priority installed-host base for
+ * bare package names. When the exact bare specifier is absent there, resolution
+ * falls back to the configuration/profile directory; relative names always
+ * resolve beside the configuration file.
  * @returns the created root Include entry, or `undefined` when a surface
  * disposed the whole tree (taking the Loader service with it) while the
  * transactional create was still settling entry lifecycle.
@@ -499,6 +525,12 @@ export async function mountRootInclude(
         /* v8 ignore next -- Node supplies the internal loader; this preserves the
            original diagnostic for hypothetical embedders without it. */
         if (internal === undefined) return super.import(specifier, getOuterStack)
+        // Profile surfaces are deliberately two-anchor: in-box modules come
+        // from the running Harness first, while packages absent from that
+        // installation remain available from the profile's node_modules.
+        if (!resolvesFromBareModuleBase(internal, specifier, bareModuleBaseUrl)) {
+          return super.import(specifier, getOuterStack)
+        }
         return internal.import(specifier, bareModuleBaseUrl, {})
       }
     }
@@ -727,12 +759,13 @@ export async function assertEntriesActivated(ctx: Context, binName: string): Pro
 /**
  * Boot the Loader against `absoluteConfigPath` and return only after the whole
  * tree settles. Relative entry names resolve against the config directory;
- * bare package names resolve there by default or against an explicit
- * `bareModuleBaseUrl` for closed packaged runtimes. The bootstrap include
- * is statically imported and mounted as the `cordis:include` builtin, loading
- * through the ambient module pipeline (vite/tsx/plain ESM). The package build
- * embeds Include while leaving Loader external, so the built include tree and
- * host share one Loader peer. Loader
+ * bare package names resolve there by default. When `bareModuleBaseUrl` is
+ * supplied, bare names resolve from that host anchor first and fall back to
+ * the config/profile directory only when the exact package specifier is not
+ * installed there. The bootstrap include is statically imported and mounted
+ * as the `cordis:include` builtin, loading through the ambient module pipeline
+ * (vite/tsx/plain ESM). The package build embeds Include while leaving Loader
+ * external, so the built include tree and host share one Loader peer. Loader
  * settlement rejects startup failures, which `boot` wraps after disposing the
  * partial context; a missing fiber or never-activating entry is rejected by
  * the final audit, {@link assertEntriesActivated}, which rethrows a plugin's
@@ -745,9 +778,8 @@ export async function assertEntriesActivated(ctx: Context, binName: string): Pro
  * @param patches - optional overlay patches applied over the included tree
  * (see {@link loadOptionalPatches}); an empty list mounts none.
  * @param prepare - optional host setup run after Loader installation and before any config-tree entry mounts.
- * @param bareModuleBaseUrl - optional installed-host base for bare package
- * names; use it when the host, rather than the configuration project, owns the
- * complete plugin set.
+ * @param bareModuleBaseUrl - optional first-priority host resolution anchor for
+ * bare package names; missing exact specifiers fall back to the config project.
  * @returns the root context once every entry has started, or as soon as a
  * surface disposed the tree while startup was still in flight.
  * @throws a labelled error after disposing the partial context — `host
