@@ -46,6 +46,10 @@ async function mount(): Promise<Bench> {
   ctx.reflect.provide('connection', handle)
   ctx.reflect.provide('remote', {})
   ctx.reflect.provide('remote.commands', fakeRemote().commands)
+  // Runtime now owns the Project Memory cache as a first-class Workbench
+  // service. These lifecycle tests do not exercise its transport, but the
+  // plugin must still see the same Remote namespace production supplies.
+  ctx.reflect.provide('remote.projectMemory', {} as never)
   await ctx.plugin(RuntimeClient).await()
   return bench
 }
