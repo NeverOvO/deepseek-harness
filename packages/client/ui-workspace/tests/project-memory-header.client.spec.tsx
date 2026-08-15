@@ -13,6 +13,14 @@ import type {
 import { zh } from '../src/client/locales.ts'
 
 const WORKSPACE_ID = 'workspace-1' as WorkspaceId
+const EMPTY = {
+  architecture: '',
+  commands: '',
+  conventions: '',
+  decisions: '',
+  knownIssues: '',
+  definitionOfDone: '',
+}
 
 function t(key: string, params?: Record<string, unknown>): string {
   const shared: Record<string, string> = { close: '关闭', cancel: '取消' }
@@ -25,38 +33,85 @@ function t(key: string, params?: Record<string, unknown>): string {
 
 function fakeController() {
   const replaces: unknown[] = []
+  const candidateCalls: string[] = []
+  let sections = { ...EMPTY }
+  let updated = 0
+  let candidates: Array<{
+    id: string
+    workspaceId: WorkspaceId
+    section: keyof typeof EMPTY
+    text: string
+    source: 'manual'
+    sourceRef: null
+    createdAt: string
+  }> = []
+  const memory = () => Object.values(sections).every(value => value === '') ? null : {
+    workspaceId: WORKSPACE_ID,
+    sections: { ...sections },
+    createdAt: '2026-08-15T00:00:00.000Z',
+    updatedAt: `2026-08-15T00:00:0${updated}.000Z`,
+  }
+  const queue = () => ({ memory: memory(), candidates: [...candidates] })
   const remote = {
     get: async () => ({
       ok: true,
-      value: { ok: true, value: { memory: null } },
+      value: { ok: true, value: { memory: memory() } },
     }),
     setSection: async () => ({
       ok: true,
-      value: { ok: true, value: { memory: null } },
+      value: { ok: true, value: { memory: memory() } },
     }),
-    replace: async (request: { sections: Record<string, string> }) => {
+    replace: async (request: { sections: typeof EMPTY }) => {
       replaces.push(request)
+      sections = { ...request.sections }
+      updated += 1
       return {
         ok: true,
-        value: {
-          ok: true,
-          value: {
-            memory: {
-              workspaceId: WORKSPACE_ID,
-              sections: request.sections,
-              createdAt: '2026-08-15T00:00:00.000Z',
-              updatedAt: '2026-08-15T00:00:01.000Z',
-            },
-          },
-        },
+        value: { ok: true, value: { memory: memory() } },
       }
     },
     clear: async () => ({
       ok: true,
       value: { ok: true, value: { cleared: true } },
     }),
+    listCandidates: async () => ({
+      ok: true,
+      value: { ok: true, value: queue() },
+    }),
+    proposeCandidate: async (request: { section: keyof typeof EMPTY; text: string }) => {
+      candidateCalls.push('propose')
+      candidates = [{
+        id: 'candidate-1',
+        workspaceId: WORKSPACE_ID,
+        section: request.section,
+        text: request.text,
+        source: 'manual',
+        sourceRef: null,
+        createdAt: '2026-08-15T00:00:01.000Z',
+      }]
+      return { ok: true, value: { ok: true, value: queue() } }
+    },
+    acceptCandidate: async () => {
+      candidateCalls.push('accept')
+      const candidate = candidates[0]
+      if (candidate !== undefined) {
+        sections = { ...sections, [candidate.section]: candidate.text }
+        updated += 1
+      }
+      candidates = []
+      return { ok: true, value: { ok: true, value: queue() } }
+    },
+    rejectCandidate: async () => {
+      candidateCalls.push('reject')
+      candidates = []
+      return { ok: true, value: { ok: true, value: queue() } }
+    },
   } as unknown as ProjectMemoryRemote
-  return { controller: new ProjectMemoryController(remote, WORKSPACE_ID), replaces }
+  return {
+    controller: new ProjectMemoryController(remote, WORKSPACE_ID),
+    replaces,
+    candidateCalls,
+  }
 }
 
 function props(
@@ -113,5 +168,31 @@ describe('ProjectMemoryHeaderAction', () => {
     await waitFor(() => {
       expect(screen.queryByLabelText('架构')).toBeNull()
     })
+  })
+
+  it('stages a candidate outside committed memory and accepts it explicitly', async () => {
+    const { controller, candidateCalls } = fakeController()
+    const workspace: ProjectMemoryWorkspace = {
+      workspaceId: WORKSPACE_ID,
+      title: 'Yanami Test',
+    }
+    render(<ProjectMemoryHeaderAction {...props(workspace, controller)} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '项目记忆' }))
+    await screen.findByLabelText('架构')
+    const candidate = await screen.findByPlaceholderText('先暂存一条可能需要长期保留的信息…')
+    fireEvent.change(candidate, { target: { value: 'WorkspaceId 作为稳定主键' } })
+    fireEvent.click(screen.getByRole('button', { name: '加入候选' }))
+
+    await screen.findByText('WorkspaceId 作为稳定主键')
+    expect((screen.getByLabelText('决策') as HTMLTextAreaElement).value).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: '采纳' }))
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('决策') as HTMLTextAreaElement).value)
+        .toBe('WorkspaceId 作为稳定主键')
+    })
+    expect(screen.queryByText('WorkspaceId 作为稳定主键')).not.toBeNull()
+    expect(candidateCalls).toEqual(['propose', 'accept'])
   })
 })
