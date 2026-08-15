@@ -39,6 +39,42 @@ function candidateSourceLabel(source: string): WorkspaceKey {
   return 'memory.candidates.source.manual'
 }
 
+/** Header trigger owns the always-on lightweight candidate-count subscription. */
+function ProjectMemoryTrigger({
+  controller,
+  open,
+  onToggle,
+  t,
+}: {
+  controller: ProjectMemoryController
+  open: boolean
+  onToggle: () => void
+  t: ProjectMemoryHeaderActionProps['t']
+}) {
+  const review = useSyncExternalStore(
+    controller.subscribeCandidates,
+    controller.getCandidateSnapshot,
+    controller.getCandidateSnapshot,
+  )
+
+  useEffect(() => {
+    void controller.ensureCandidates()
+  }, [controller])
+
+  const count = review.state === 'ready' ? review.candidates.length : 0
+  return (
+    <button
+      type="button"
+      className={css.trigger}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      {t('memory.action')}
+      {count > 0 && <span className={css.badge} aria-hidden="true">{count > 99 ? '99+' : count}</span>}
+    </button>
+  )
+}
+
 /** Editor body separated from the trigger so controller hooks never become conditional. */
 function ProjectMemoryEditor({
   controller,
@@ -285,14 +321,12 @@ export function ProjectMemoryHeaderAction({
 
   return (
     <>
-      <button
-        type="button"
-        className={css.trigger}
-        aria-expanded={open}
-        onClick={() => { setOpen(value => !value) }}
-      >
-        {t('memory.action')}
-      </button>
+      <ProjectMemoryTrigger
+        controller={controller}
+        open={open}
+        onToggle={() => { setOpen(value => !value) }}
+        t={t}
+      />
       {open && (
         <ProjectMemoryEditor
           key={workspace.workspaceId}
