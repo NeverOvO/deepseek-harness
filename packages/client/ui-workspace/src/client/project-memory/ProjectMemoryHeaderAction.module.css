@@ -1,4 +1,7 @@
 .trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 26px;
   border: 0;
   border-radius: 8px;
@@ -16,6 +19,18 @@
 .trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+.badge {
+  min-width: 16px;
+  height: 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
 }
 
 .editor {
