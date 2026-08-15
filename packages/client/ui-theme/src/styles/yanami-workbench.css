@@ -51,6 +51,33 @@ body {
 }
 
 body[data-ds-dark-theme] {
+  --dsw-alias-bg-base: rgb(15, 27, 42);
+  --dsw-alias-bg-layer-1: rgba(23, 40, 59, 0.9);
+  --dsw-alias-bg-layer-2: rgba(27, 46, 67, 0.82);
+  --dsw-alias-bg-layer-3: rgba(31, 51, 73, 0.92);
+  --dsw-alias-bg-module-platform: rgba(22, 39, 58, 0.86);
+  --dsw-alias-bg-overlay: rgba(24, 42, 62, 0.96);
+  --dsw-alias-border-l1: rgba(140, 180, 218, 0.08);
+  --dsw-alias-border-l2: rgba(140, 180, 218, 0.16);
+  --dsw-alias-border-l2-darkmode-thin: rgba(140, 180, 218, 0.16);
+  --dsw-alias-border-l3: rgba(140, 180, 218, 0.24);
+  --dsw-alias-border-l4: rgba(140, 180, 218, 0.32);
+  --dsw-alias-brand-primary: rgb(134, 190, 248);
+  --dsw-alias-brand-primary-invert: rgb(13, 25, 39);
+  --dsw-alias-brand-primary-new-colorprimary-new-color: rgb(104, 169, 241);
+  --dsw-alias-brand-text: rgb(161, 205, 248);
+  --dsw-alias-label-primary: rgb(224, 235, 247);
+  --dsw-alias-label-secondary: rgb(167, 190, 214);
+  --dsw-alias-label-tertiary: rgb(117, 145, 172);
+  --dsw-alias-button-elevated-fill: rgba(31, 51, 73, 0.88);
+  --dsw-alias-button-floating-fill: rgba(35, 57, 80, 0.92);
+  --dsw-alias-button-floating-hover: rgba(55, 83, 111, 0.9);
+  --dsw-alias-button-info-fill: rgb(78, 143, 226);
+  --dsw-alias-button-info-hover: rgb(96, 158, 236);
+  --dsw-alias-interactive-bg-hover: rgba(111, 174, 246, 0.12);
+  --dsw-alias-interactive-bg-selected: rgba(111, 174, 246, 0.18);
+  --dsw-specific-sidebar-fill: rgba(17, 32, 49, 0.78);
+
   --dsw-alias-yanami-navy: rgb(204, 225, 247);
   --dsw-alias-yanami-blue: rgb(111, 174, 246);
   --dsw-alias-yanami-sky: rgb(74, 118, 161);
