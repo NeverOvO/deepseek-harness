@@ -83,4 +83,46 @@ describe('Project Memory proposal safety boundary', () => {
       .rejects.toThrow(/exceeds 8000 characters/)
     expect(proposeCandidate).not.toHaveBeenCalled()
   })
+
+  it('forwards candidate puts and deletes to the owning Workspace, including persisted rows', () => {
+    const ctx = new Context()
+    ctx.provide('workspaceRegistry', { list: () => [workspace] } as never)
+    ctx.provide('projectMemory', {
+      candidates: () => [{
+        id: 'persisted-candidate',
+        workspaceId: WORKSPACE_ID,
+        section: 'decisions',
+        text: 'persisted',
+        source: 'session',
+        sourceRef: 'session-old',
+        createdAt: '2026-08-15T00:00:00.000Z',
+      }],
+    } as never)
+
+    const changed: string[] = []
+    ctx.on('project-memory/candidates-changed', workspaceId => { changed.push(workspaceId) })
+    internals.installCandidateChangeBridge(ctx)
+
+    ctx.emit('domain/changed', {
+      domain: 'project_memory_candidates',
+      table: 'candidates',
+      key: 'new-candidate',
+      operation: 'put',
+      value: { workspaceId: WORKSPACE_ID },
+    })
+    ctx.emit('domain/changed', {
+      domain: 'project_memory_candidates',
+      table: 'candidates',
+      key: 'new-candidate',
+      operation: 'deleted',
+    })
+    ctx.emit('domain/changed', {
+      domain: 'project_memory_candidates',
+      table: 'candidates',
+      key: 'persisted-candidate',
+      operation: 'deleted',
+    })
+
+    expect(changed).toEqual([WORKSPACE_ID, WORKSPACE_ID, WORKSPACE_ID])
+  })
 })
