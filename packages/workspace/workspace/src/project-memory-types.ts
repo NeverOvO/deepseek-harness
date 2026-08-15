@@ -160,3 +160,15 @@ export type ProjectMemoryClearResult =
 export type ProjectMemoryCandidateQueueResult =
   | ProjectMemorySuccess<ProjectMemoryCandidateQueueValue>
   | ProjectMemoryCandidateRejected
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * The pending candidate queue for one Workspace changed. This is a
+     * one-way invalidation hint: consumers re-read the authoritative queue
+     * through `projectMemory.listCandidates` rather than trusting event data.
+     * @mode emit
+     */
+    'project-memory/candidates-changed'(workspaceId: ProjectMemoryWorkspaceId): void
+  }
+}
