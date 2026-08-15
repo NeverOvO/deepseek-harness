@@ -20,11 +20,16 @@
 
 .editor {
   display: grid;
-  gap: 14px;
-  width: min(680px, 72vw);
-  max-height: min(68vh, 720px);
+  gap: 18px;
+  width: min(720px, 74vw);
+  max-height: min(72vh, 760px);
   overflow: auto;
   padding-right: 2px;
+}
+
+.sections {
+  display: grid;
+  gap: 14px;
 }
 
 .section {
@@ -39,28 +44,114 @@
   line-height: 20px;
 }
 
-.textarea {
+.textarea,
+.candidateTextarea,
+.select {
   box-sizing: border-box;
   width: 100%;
-  min-height: 86px;
-  resize: vertical;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;
   outline: none;
-  padding: 10px 12px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
+}
+
+.textarea {
+  min-height: 86px;
+  resize: vertical;
+  padding: 10px 12px;
   line-height: 19px;
 }
 
-.textarea:focus {
+.textarea:focus,
+.candidateTextarea:focus,
+.select:focus {
   border-color: var(--dsw-alias-state-business-primary);
 }
 
-.textarea:disabled {
+.textarea:disabled,
+.candidateTextarea:disabled,
+.select:disabled {
   color: var(--dsw-alias-label-dimmed);
+}
+
+.candidates {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  padding-top: 18px;
+}
+
+.candidateHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.help {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.candidateComposer {
+  display: grid;
+  grid-template-columns: minmax(132px, 0.28fr) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.select {
+  height: 36px;
+  padding: 0 10px;
+}
+
+.candidateTextarea {
+  min-height: 64px;
+  resize: vertical;
+  padding: 8px 10px;
+  line-height: 18px;
+}
+
+.candidateList {
+  display: grid;
+  gap: 10px;
+}
+
+.candidateCard {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.candidateMeta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.candidateText {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 19px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.candidateActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .status,
@@ -75,4 +166,10 @@
 
 .error {
   color: var(--dsw-alias-state-error-primary);
+}
+
+@media (max-width: 820px) {
+  .candidateComposer {
+    grid-template-columns: 1fr;
+  }
 }
