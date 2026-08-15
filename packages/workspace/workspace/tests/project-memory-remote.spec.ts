@@ -98,7 +98,78 @@ describe('ProjectMemoryService Remote surface', () => {
     await result.workspaceFiber.dispose()
   })
 
-  it('keeps unknown Workspace ids inside the business failure union', async () => {
+  it('stages candidates outside committed context and reviews them explicitly', async () => {
+    const result = await harness()
+    const workspace = await result.ctx.workspaceRegistry.create(await makeDir('review'))
+
+    const proposed = await result.ctx.projectMemory.remoteProposeCandidate({
+      workspaceId: workspace.id,
+      section: 'commands',
+      text: 'pnpm run constraints',
+      source: 'manual',
+      sourceRef: null,
+    })
+    expect(proposed).toMatchObject({
+      ok: true,
+      value: {
+        memory: null,
+        candidates: [{
+          workspaceId: workspace.id,
+          section: 'commands',
+          text: 'pnpm run constraints',
+          source: 'manual',
+        }],
+      },
+    })
+    if (!proposed.ok) throw new Error('candidate proposal failed')
+    const candidateId = proposed.value.candidates[0]?.id
+    if (candidateId === undefined) throw new Error('candidate id missing')
+
+    await expect(result.ctx.projectMemory.remoteGet({ workspaceId: workspace.id })).resolves.toEqual({
+      ok: true,
+      value: { memory: null },
+    })
+
+    const accepted = await result.ctx.projectMemory.remoteAcceptCandidate({
+      workspaceId: workspace.id,
+      candidateId,
+    })
+    expect(accepted).toMatchObject({
+      ok: true,
+      value: {
+        memory: { sections: { commands: 'pnpm run constraints' } },
+        candidates: [],
+      },
+    })
+
+    const second = await result.ctx.projectMemory.remoteProposeCandidate({
+      workspaceId: workspace.id,
+      section: 'knownIssues',
+      text: 'Windows Desktop not verified',
+      source: 'session',
+      sourceRef: 'session-1',
+    })
+    if (!second.ok) throw new Error('second candidate proposal failed')
+    const secondId = second.value.candidates[0]?.id
+    if (secondId === undefined) throw new Error('second candidate id missing')
+
+    const rejected = await result.ctx.projectMemory.remoteRejectCandidate({
+      workspaceId: workspace.id,
+      candidateId: secondId,
+    })
+    expect(rejected).toMatchObject({
+      ok: true,
+      value: {
+        memory: { sections: { commands: 'pnpm run constraints' } },
+        candidates: [],
+      },
+    })
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
+  })
+
+  it('keeps unknown Workspace and candidate ids inside business failure unions', async () => {
     const result = await harness()
     const workspaceId = WorkspaceId('missing')
 
@@ -117,6 +188,23 @@ describe('ProjectMemoryService Remote surface', () => {
     await expect(result.ctx.projectMemory.remoteClear({ workspaceId })).resolves.toEqual({
       ok: false,
       error: { code: 'workspace-not-found', workspaceId },
+    })
+    await expect(result.ctx.projectMemory.remoteListCandidates({ workspaceId })).resolves.toEqual({
+      ok: false,
+      error: { code: 'workspace-not-found', workspaceId },
+    })
+
+    const workspace = await result.ctx.workspaceRegistry.create(await makeDir('candidate-missing'))
+    await expect(result.ctx.projectMemory.remoteAcceptCandidate({
+      workspaceId: workspace.id,
+      candidateId: 'missing-candidate',
+    })).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'candidate-not-found',
+        workspaceId: workspace.id,
+        candidateId: 'missing-candidate',
+      },
     })
 
     await result.memoryFiber.dispose()
