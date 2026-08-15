@@ -9,6 +9,7 @@ on:
       - 'apps/cli/**'
       - 'packages/**'
       - 'package.json'
+      - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
       - '.github/workflows/yanami-desktop-macos.yml'
   workflow_dispatch:
