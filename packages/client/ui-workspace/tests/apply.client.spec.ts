@@ -161,7 +161,8 @@ describe('ui-workspace apply', () => {
     declareHeaderActions(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('conversation.session.header.actions')[0]!
-    const injected = (entry.inject as (sessionId: string) => ProjectMemoryHeaderInjected)('session')
+    const injectMemory = entry.inject as unknown as (sessionId: string) => ProjectMemoryHeaderInjected
+    const injected = injectMemory('session')
 
     expect(injected.hooks.projectWorkspace.getSnapshot()).toMatchObject({
       workspaceId: 'ws',
@@ -170,7 +171,7 @@ describe('ui-workspace apply', () => {
     expect(injected.controllerFor('ws' as never)).toBe(b.controller)
     expect(b.controllerFor).toHaveBeenCalledWith('ws')
 
-    const ungrouped = (entry.inject as (sessionId: string) => ProjectMemoryHeaderInjected)('ungrouped')
+    const ungrouped = injectMemory('ungrouped')
     expect(ungrouped.hooks.projectWorkspace.getSnapshot()).toBeNull()
   })
 
