@@ -15,21 +15,38 @@ const MIN_HEIGHT = 700
 
 let mainWindow: BrowserWindow | undefined
 let runtime: DesktopRuntime | undefined
+let runtimeStarting: Promise<DesktopRuntime> | undefined
 let quitting = false
 
 function preloadPath(): string {
   return fileURLToPath(new URL('./preload.js', import.meta.url))
 }
 
-async function ensureRuntime(): Promise<DesktopRuntime> {
-  runtime ??= await startDesktopRuntime()
-  return runtime
+function splashPath(): string {
+  return fileURLToPath(new URL('../assets/splash.html', import.meta.url))
 }
 
-async function createMainWindow(): Promise<BrowserWindow> {
-  const activeRuntime = await ensureRuntime()
-  const isMac = process.platform === 'darwin'
+async function ensureRuntime(): Promise<DesktopRuntime> {
+  if (runtime !== undefined) return runtime
+  runtimeStarting ??= startDesktopRuntime()
+  try {
+    runtime = await runtimeStarting
+    return runtime
+  } finally {
+    runtimeStarting = undefined
+  }
+}
 
+function sameOrigin(candidate: string, allowedOrigin: string): boolean {
+  try {
+    return new URL(candidate).origin === allowedOrigin
+  } catch {
+    return false
+  }
+}
+
+function createWindowShell(): BrowserWindow {
+  const isMac = process.platform === 'darwin'
   const window = new BrowserWindow({
     title: APP_NAME,
     width: DEFAULT_WIDTH,
@@ -58,20 +75,41 @@ async function createMainWindow(): Promise<BrowserWindow> {
     return { action: 'deny' }
   })
 
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(activeRuntime.url)) event.preventDefault()
-  })
-
   window.once('ready-to-show', () => {
-    window.show()
+    if (!window.isDestroyed()) window.show()
   })
 
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = undefined
   })
 
-  await window.loadURL(activeRuntime.url)
   return window
+}
+
+async function hydrateWindow(window: BrowserWindow): Promise<void> {
+  await window.loadFile(splashPath())
+  if (!window.isVisible()) window.show()
+
+  const activeRuntime = await ensureRuntime()
+  if (window.isDestroyed()) return
+
+  const allowedOrigin = new URL(activeRuntime.url).origin
+  window.webContents.on('will-navigate', (event, url) => {
+    if (!sameOrigin(url, allowedOrigin)) event.preventDefault()
+  })
+
+  activeRuntime.process.once('exit', () => {
+    if (quitting) return
+    if (runtime?.process === activeRuntime.process) runtime = undefined
+    if (!window.isDestroyed()) {
+      dialog.showErrorBox(
+        'DSH Runtime 已停止',
+        '八奈见工作台的执行引擎意外退出。关闭并重新打开窗口可重新启动 Runtime。',
+      )
+    }
+  })
+
+  await window.loadURL(activeRuntime.url)
 }
 
 async function activate(): Promise<void> {
@@ -81,7 +119,15 @@ async function activate(): Promise<void> {
     mainWindow.focus()
     return
   }
-  mainWindow = await createMainWindow()
+
+  const window = createWindowShell()
+  mainWindow = window
+  try {
+    await hydrateWindow(window)
+  } catch (error) {
+    if (!window.isDestroyed()) window.close()
+    throw error
+  }
 }
 
 async function boot(): Promise<void> {
