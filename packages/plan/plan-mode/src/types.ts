@@ -1,9 +1,7 @@
 /**
- * Pure types of the plan domain: the ONE home of the `plan` projection-key
- * declaration, free of this package's host-side value imports (cordis
- * service, dsh-tools, dsh-agent). Two namespace projections serve it —
- * `./types` for host consumers, `./client` for client aggregates — with zero
- * content duplication.
+ * Pure types of the plan/collaboration domain. This is the one host-neutral
+ * home of projection-key declarations; both host and browser code receive the
+ * same declaration through the package's `./types` / `./client` outlets.
  *
  * @module @deepseek-ai/dsh-plan-mode/types
  */
@@ -20,9 +18,22 @@ export interface PlanProjection {
   pending: boolean
 }
 
+/** Durable non-plan collaboration modes owned by Yanami Workbench. */
+export type YanamiBaseMode = 'do' | 'spec' | 'review' | 'ship'
+
+/** User-visible effective mode; Plan overlays rather than replaces the base mode. */
+export type YanamiMode = YanamiBaseMode | 'plan'
+
+/** Host-folded effective Yanami mode exposed to browser clients. */
+export interface YanamiModeProjection {
+  mode: YanamiMode
+}
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Plan collaboration state folded from `command/run` (name `plan`) and `plan/mode` events. */
     plan: PlanProjection
+    /** Effective Yanami collaboration mode folded from `yanami/mode` plus the Plan overlay. */
+    yanamiMode: YanamiModeProjection
   }
 }
