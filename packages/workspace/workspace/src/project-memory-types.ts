@@ -5,7 +5,15 @@
  * @module @deepseek-ai/dsh-workspace/project-memory-types
  */
 
-import type { WorkspaceId } from './types.ts'
+import type { Branded } from '@deepseek-ai/dsh-brand'
+
+/**
+ * Browser-safe Workspace identity. The brand string is identical to Workspace
+ * Core's `WorkspaceId`, but this contract deliberately does not import the
+ * Workspace host package's `types.ts` because that module also names Session
+ * host types and would contaminate the Client compilation graph.
+ */
+export type ProjectMemoryWorkspaceId = Branded<'WorkspaceId'>
 
 /** Canonical editable Project Memory sections, in product order. */
 export type ProjectMemorySection =
@@ -28,7 +36,7 @@ export interface ProjectMemorySectionsView {
 
 /** Durable Project Memory projection returned to trusted Workbench clients. */
 export interface ProjectMemoryView {
-  readonly workspaceId: WorkspaceId
+  readonly workspaceId: ProjectMemoryWorkspaceId
   readonly sections: ProjectMemorySectionsView
   readonly createdAt: string
   readonly updatedAt: string
@@ -36,25 +44,25 @@ export interface ProjectMemoryView {
 
 /** Read the Project Memory associated with one stable Workspace identity. */
 export interface ProjectMemoryGetRequest {
-  readonly workspaceId: WorkspaceId
+  readonly workspaceId: ProjectMemoryWorkspaceId
 }
 
 /** Replace one canonical Project Memory section. */
 export interface ProjectMemorySetSectionRequest {
-  readonly workspaceId: WorkspaceId
+  readonly workspaceId: ProjectMemoryWorkspaceId
   readonly section: ProjectMemorySection
   readonly text: string
 }
 
 /** Atomically replace all six Project Memory sections. */
 export interface ProjectMemoryReplaceRequest {
-  readonly workspaceId: WorkspaceId
+  readonly workspaceId: ProjectMemoryWorkspaceId
   readonly sections: ProjectMemorySectionsView
 }
 
 /** Remove the Project Memory sidecar for one registered Workspace. */
 export interface ProjectMemoryClearRequest {
-  readonly workspaceId: WorkspaceId
+  readonly workspaceId: ProjectMemoryWorkspaceId
 }
 
 /** Current memory; `null` means the Workspace is known but no row exists. */
@@ -70,7 +78,7 @@ export interface ProjectMemoryClearValue {
 /** The stable Workspace identity no longer exists in Workspace Core. */
 export interface ProjectMemoryWorkspaceNotFound {
   readonly code: 'workspace-not-found'
-  readonly workspaceId: WorkspaceId
+  readonly workspaceId: ProjectMemoryWorkspaceId
 }
 
 /** Successful Project Memory Remote operation. */
