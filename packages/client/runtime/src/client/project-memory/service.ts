@@ -90,7 +90,7 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     if (this.loadPromise !== null) return this.loadPromise
     if (this.disposed) return Promise.resolve(failure('disposed', 'Project Memory controller is disposed'))
     const current = this.store.getSnapshot()
-    this.store.setSnapshot({ state: 'loading', memory: current.memory, error: null })
+    this.store.set({ state: 'loading', memory: current.memory, error: null })
     const pending = this.load()
     this.loadPromise = pending
     return pending.finally(() => { this.loadPromise = null })
@@ -122,7 +122,7 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
         const code = carried.value.error.code
         return failure(code, businessMessage(code))
       }
-      this.store.setSnapshot({ state: 'ready', memory: null, error: null })
+      this.store.set({ state: 'ready', memory: null, error: null })
       return OK
     })
   }
@@ -131,7 +131,7 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
   invalidate(): void {
     if (this.disposed) return
     const current = this.store.getSnapshot()
-    this.store.setSnapshot({ state: 'cold', memory: current.memory, error: null })
+    this.store.set({ state: 'cold', memory: current.memory, error: null })
   }
 
   dispose(): void {
@@ -145,7 +145,7 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
       if (this.disposed) return OK
       const message = error instanceof Error ? error.message : 'Project Memory load failed'
       const current = this.store.getSnapshot()
-      this.store.setSnapshot({ state: 'error', memory: current.memory, error: message })
+      this.store.set({ state: 'error', memory: current.memory, error: message })
       return failure('transport', message)
     }
   }
@@ -154,17 +154,17 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     if (this.disposed) return OK
     if (!carried.ok) {
       const current = this.store.getSnapshot()
-      this.store.setSnapshot({ state: 'error', memory: current.memory, error: carried.error.message })
+      this.store.set({ state: 'error', memory: current.memory, error: carried.error.message })
       return failure(carried.error.code, carried.error.message)
     }
     if (!carried.value.ok) {
       const code = carried.value.error.code
       const message = businessMessage(code)
       const current = this.store.getSnapshot()
-      this.store.setSnapshot({ state: 'error', memory: current.memory, error: message })
+      this.store.set({ state: 'error', memory: current.memory, error: message })
       return failure(code, message)
     }
-    this.store.setSnapshot({ state: 'ready', memory: carried.value.value.memory, error: null })
+    this.store.set({ state: 'ready', memory: carried.value.value.memory, error: null })
     return OK
   }
 
