@@ -1,0 +1,59 @@
+name: Yanami Workbench CI
+
+on:
+  push:
+    branches:
+      - feat/yanami-workbench-ui
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/client/ui-conversation/**'
+      - 'packages/client/ui-theme/**'
+      - 'packages/plan/plan-mode/**'
+      - 'packages/goal/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/yanami-workbench-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yanami-workbench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  workbench:
+    name: Workbench / Node 24
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install immutable workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Yanami Workbench surfaces
+        run: >-
+          pnpm exec vitest run
+          packages/client/ui-conversation/tests/yanami-home.client.spec.tsx
+          packages/plan/plan-mode/tests
+
+      - name: Build repository
+        run: pnpm run build
+
+      - name: Verify package constraints
+        run: pnpm run constraints
