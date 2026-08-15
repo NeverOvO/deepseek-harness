@@ -43,12 +43,38 @@ interface MountedTree {
 const mounted = new WeakMap<object, MountedTree>()
 
 /**
- * The base URL bare specifiers resolve against, per pending mount, keyed by the
- * same config object. Recorded before the subtree is plugged, because `Include`
- * rewrites its own context's `baseUrl` to the composition's directory and the
- * pre-mount value is the only handle on where the harness itself lives.
+ * Profile/composition fallback base for bare specifiers, per pending mount.
+ * Recorded before the subtree is plugged, because `Include` rewrites its own
+ * context's `baseUrl` to the preset directory. A profile launcher may also
+ * publish `Loader.Config.preferredBareModuleBaseUrl`; when present that
+ * installation-owned base is tried first, and this base remains the fallback
+ * for profile-only third-party plugins.
  */
 const harnessBase = new WeakMap<object, string>()
+
+/**
+ * Return whether `specifier` resolves from one preferred Node module base.
+ * Missing modules fall back to the profile base; every other error stays
+ * fail-loud. In particular, finding an installed package whose export map
+ * omits the requested subpath must not silently switch to a stale profile copy.
+ */
+function resolvesFromPreferredBase(
+  internal: NonNullable<Context['loader']['internal']>,
+  specifier: string,
+  baseUrl: string,
+): boolean {
+  try {
+    if (internal.version === 'v2') {
+      internal.resolveSync(baseUrl, { specifier })
+    } else {
+      internal.resolveSync(specifier, baseUrl, {})
+    }
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | null)?.code === 'ERR_MODULE_NOT_FOUND') return false
+    throw error
+  }
+}
 
 /**
  * Include subclass that publishes its tree and fiber for the audit, and never
@@ -61,34 +87,43 @@ class PresetTree extends Include {
   }
 
   /**
-   * Resolve a bare specifier from the harness rather than from the preset.
+   * Resolve bare preset rows installation-first, then profile-local.
    *
    * `EntryTree.import()` resolves against the tree's own `baseUrl`, which
-   * `Include` sets to the composition's directory. That is right for a
-   * relative specifier — a preset's own files travel with it — and wrong for
-   * a package name: a locally authored preset lives under the user's home,
-   * where Node's upward `node_modules` walk never reaches the harness's own
-   * dependencies, so every `@deepseek-ai/dsh-*` row would fail to import. The
-   * mount records the host composition's base instead, which is inside the
-   * installed harness, and bare names resolve from there. An absolute
-   * filesystem path names neither base and becomes a file URL before Node's
-   * ESM loader receives it, which is required for drive-letter paths on
-   * Windows.
+   * `Include` sets to the preset directory. That is right for a relative
+   * specifier — a preset's own files travel with it — but bare package rows
+   * belong to one of two ownership planes. In-box packages must resolve from
+   * the running Harness so a stale profile-local copy cannot hide a newly
+   * exported subpath; packages absent from that installation may still be
+   * profile-installed third-party plugins. The profile/composition base
+   * recorded by `mountPreset` supplies that second anchor.
+   *
+   * An absolute filesystem path names neither base and becomes a file URL
+   * before Node's ESM loader receives it, which is required for drive-letter
+   * paths on Windows.
    * @param name - the module specifier from the row.
    * @param getOuterStack - the loader's stack composer for import diagnostics.
    * @returns the imported module, or the `cordis:` builtin.
    */
   override import(name: string, getOuterStack?: () => string[]): unknown {
     const specifier = isAbsolute(name) ? pathToFileURL(name).href : name
-    const base = harnessBase.get(this.config)
-    /* v8 ignore next -- every PresetTree is constructed by `mountPreset`, which records the base first */
-    if (base === undefined) return super.import(specifier, getOuterStack)
-    if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(name, getOuterStack)
+    if (name.startsWith('.') || name.startsWith('cordis:') || isAbsolute(name)) {
+      return super.import(specifier, getOuterStack)
+    }
     const internal = this.ctx.loader.internal
     /* v8 ignore next -- Node always supplies the internal module loader; the branch keeps a
        hypothetical embedder from losing the row's name in a resolution error. */
     if (internal === undefined) return super.import(specifier, getOuterStack)
-    return internal.import(specifier, base, {})
+
+    const preferredBase = this.ctx.loader.config.preferredBareModuleBaseUrl
+    if (preferredBase !== undefined && resolvesFromPreferredBase(internal, specifier, preferredBase)) {
+      return internal.import(specifier, preferredBase, {})
+    }
+
+    const fallbackBase = harnessBase.get(this.config)
+    /* v8 ignore next -- every PresetTree is constructed by `mountPreset`, which records the base first */
+    if (fallbackBase === undefined) return super.import(specifier, getOuterStack)
+    return internal.import(specifier, fallbackBase, {})
   }
 
   /**
@@ -339,8 +374,8 @@ export async function mountPreset(agentCtx: Context, preset: AgentPreset): Promi
   }
   const config: Include.Config = { path: pathToFileURL(preset.path).href }
   // Captured before the subtree exists: the standing scope context still
-  // carries the host composition's base, which is inside the installed
-  // harness and is therefore where a row's package name has to resolve from.
+  // carries the profile/host composition base. PresetTree keeps it as the
+  // fallback after Loader's installation-owned preferred bare-module base.
   /* v8 ignore next -- the Loader sets `baseUrl` on the root before any scoped context derives from it */
   if (agentCtx.baseUrl !== undefined) harnessBase.set(config, agentCtx.baseUrl)
   // Before the record this mount is about to add: standing mounts are one per
