@@ -189,7 +189,7 @@ export function apply(ctx: Context, config: Config): void {
         order: -98,
         text: () => webSurfacePrompt(localWebUrl(promptCtx)),
       })
-      promptCtx.on('system-prompt/assemble', async (assembly, _context, next) => {
+      promptCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
         const transformed = await next()
         return await appendProjectMemoryContext(promptCtx, transformed)
       })
