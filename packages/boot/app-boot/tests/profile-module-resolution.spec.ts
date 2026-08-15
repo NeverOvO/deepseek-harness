@@ -65,7 +65,7 @@ describe('profile module resolution', () => {
     ].join('\n'))
 
     const harnessBaseUrl = pathToFileURL(join(harness, 'entry.mjs')).href
-    let ctx
+    let ctx: Awaited<ReturnType<typeof boot>> | undefined
     try {
       ctx = await boot('dsh-test-bin', config, undefined, undefined, harnessBaseUrl)
       expect(ctx.get('projectMemorySource')).toBe('harness')
