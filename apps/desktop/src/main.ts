@@ -16,6 +16,7 @@ const MIN_HEIGHT = 700
 let mainWindow: BrowserWindow | undefined
 let runtime: DesktopRuntime | undefined
 let runtimeStarting: Promise<DesktopRuntime> | undefined
+let runtimeAbortController: AbortController | undefined
 let quitting = false
 
 function preloadPath(): string {
@@ -28,13 +29,34 @@ function splashPath(): string {
 
 async function ensureRuntime(): Promise<DesktopRuntime> {
   if (runtime !== undefined) return runtime
-  runtimeStarting ??= startDesktopRuntime()
+  if (runtimeStarting === undefined) {
+    const controller = new AbortController()
+    runtimeAbortController = controller
+    runtimeStarting = startDesktopRuntime(controller.signal)
+  }
+
   try {
     runtime = await runtimeStarting
     return runtime
   } finally {
     runtimeStarting = undefined
+    runtimeAbortController = undefined
   }
+}
+
+async function shutdownRuntime(): Promise<void> {
+  runtimeAbortController?.abort()
+  const starting = runtimeStarting
+  if (starting !== undefined) {
+    try {
+      await starting
+    } catch {
+      // Startup cancellation is the expected path when the user quits while
+      // the splash screen is still waiting for DSH readiness.
+    }
+  }
+  await stopDesktopRuntime(runtime)
+  runtime = undefined
 }
 
 function sameOrigin(candidate: string, allowedOrigin: string): boolean {
@@ -153,11 +175,10 @@ if (!singleInstance) {
   })
 
   app.on('before-quit', (event) => {
-    if (quitting || runtime === undefined) return
+    if (quitting || (runtime === undefined && runtimeStarting === undefined)) return
     event.preventDefault()
     quitting = true
-    void stopDesktopRuntime(runtime).finally(() => {
-      runtime = undefined
+    void shutdownRuntime().finally(() => {
       app.quit()
     })
   })
@@ -165,6 +186,7 @@ if (!singleInstance) {
   void app.whenReady()
     .then(boot)
     .catch((error: unknown) => {
+      if (quitting) return
       const message = error instanceof Error ? error.stack ?? error.message : String(error)
       dialog.showErrorBox(`${APP_NAME} 启动失败`, message)
       app.quit()
