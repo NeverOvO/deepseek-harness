@@ -1,6 +1,6 @@
 /** Session-header Project Memory trigger and six-section editor. */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProjectMemoryController, ProjectMemoryState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceKey } from '../locales.ts'
@@ -44,13 +44,7 @@ function ProjectMemoryEditor({
   onClose: () => void
   t: ProjectMemoryHeaderActionProps['t']
 }) {
-  const state = controller.getSnapshot()
-  // ProjectMemoryController is a bare external store; the injected hook
-  // machinery is unnecessary here because this editor owns exactly one
-  // controller for its modal lifetime.
-  const [, rerender] = useState(0)
-  useEffect(() => controller.subscribe(() => { rerender(value => value + 1) }), [controller])
-  const live = controller.getSnapshot()
+  const live = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
   const committed = live.memory?.sections ?? EMPTY_SECTIONS
   const [draft, setDraft] = useState<ProjectMemorySections>(committed)
   const [saving, setSaving] = useState(false)
