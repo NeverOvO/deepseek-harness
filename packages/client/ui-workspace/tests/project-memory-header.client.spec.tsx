@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -62,9 +63,7 @@ function props(
   workspace: ProjectMemoryWorkspace | null,
   controller: ProjectMemoryController,
 ): ProjectMemoryHeaderActionProps {
-  const useProjectWorkspace = <Selected,>(
-    selector: (state: ProjectMemoryWorkspace | null) => Selected,
-  ): Selected => selector(workspace)
+  const useProjectWorkspace: ProjectMemoryHeaderActionProps['useProjectWorkspace'] = selector => selector(workspace)
   return {
     useProjectWorkspace,
     controllerFor: () => controller,
