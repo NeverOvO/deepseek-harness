@@ -152,7 +152,7 @@ export function YanamiHome({
           <div className={css.panelTitle}>
             <span className={css.panelIcon}>◎</span>
             <div><strong>任务驾驶舱</strong><small>Mission Cockpit</small></div>
-            <span className={css.missionStatus}>{missionPhaseLabel(mission)}</span>
+            <span className={css.phaseTag}>{missionPhaseLabel(mission)}</span>
           </div>
           <div
             className={css.progressTrack}
@@ -168,9 +168,9 @@ export function YanamiHome({
             ? <p>创建 Goal 后，这里会实时显示目标、生命周期、阻塞原因与执行轮次。</p>
             : (
               <>
-                <p className={css.missionObjective} title={mission.goal.objective}>{mission.goal.objective}</p>
+                <p title={mission.goal.objective}>{mission.goal.objective}</p>
                 {mission.goal.phase === 'blocked' && mission.goal.blockedReason !== undefined && (
-                  <p className={css.missionReason} role="status">
+                  <p role="status">
                     <strong>阻塞：</strong>{mission.goal.blockedReason.message}
                   </p>
                 )}
