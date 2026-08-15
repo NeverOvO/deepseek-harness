@@ -13,7 +13,7 @@
 
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
@@ -243,6 +243,12 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     ...loadOptionalPatches(NAME, homePatchPath()) ?? [],
     ...composed.overlays,
   ])
+  // Profile module resolution is installation-first: shipped rows must use the
+  // same package graph as this running `dsh`, even when a long-lived profile
+  // node_modules still contains an older copy. app-boot falls back to the
+  // profile base only when the exact bare specifier is absent from the current
+  // installation, preserving third-party profile plugins.
+  const installModuleBaseUrl = pathToFileURL(INSTALL_ANCHOR).href
   // Cloned for the same insert-aliasing reason as composeLive: the boot
   // application must not mutate the objects later reloads recompose from.
   const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
@@ -256,7 +262,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       args: options.args,
       exit: code => void shutdown.shutdown(code),
     })
-  })
+  }, installModuleBaseUrl)
   app.current = ctx
   // A surface can dispose the whole tree while boot or this post-boot watcher
   // setup is still in flight — a signal, or a fast one-shot's appExit. Loader
