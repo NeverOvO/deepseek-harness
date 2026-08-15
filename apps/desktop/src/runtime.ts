@@ -51,9 +51,11 @@ export function parseRuntimeReadyUrl(output: string): string | undefined {
 
 /**
  * Start a private loopback-only DSH Web runtime and resolve only after the
- * runtime prints its canonical ready URL.
+ * runtime prints its canonical ready URL. Aborting startup terminates the
+ * child so quitting during the splash screen never leaves an orphan runtime.
  */
-export async function startDesktopRuntime(): Promise<DesktopRuntime> {
+export async function startDesktopRuntime(signal?: AbortSignal): Promise<DesktopRuntime> {
+  signal?.throwIfAborted()
   const entry = resolveDshCliEntry()
   const launcher = runtimeLauncher()
   const child = spawn(
@@ -62,6 +64,7 @@ export async function startDesktopRuntime(): Promise<DesktopRuntime> {
     {
       env: launcher.environment,
       stdio: 'pipe',
+      ...(signal === undefined ? {} : { signal }),
     },
   )
   child.stdin.end()
@@ -106,10 +109,10 @@ export async function startDesktopRuntime(): Promise<DesktopRuntime> {
       settle(() => { reject(error) })
     })
 
-    child.once('exit', (code, signal) => {
+    child.once('exit', (code, exitSignal) => {
       settle(() => {
         reject(new Error(
-          `DSH runtime exited before readiness (code=${String(code)}, signal=${String(signal)}).`
+          `DSH runtime exited before readiness (code=${String(code)}, signal=${String(exitSignal)}).`
           + `${stderr === '' ? '' : `\n${stderr.trim()}`}`,
         ))
       })
