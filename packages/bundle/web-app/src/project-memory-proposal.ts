@@ -8,6 +8,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-workspace/project-memory'
@@ -26,6 +27,8 @@ const SECTION_NAMES = [
 ] as const satisfies readonly ProjectMemorySection[]
 
 const MAX_CANDIDATE_CHARS = 8_000
+
+const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Do not stage transient progress, temporary observations, unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
 
 /** Resolve only already-registered Workspace ownership; never create one as a tool side effect. */
 function workspaceForSession(
@@ -101,12 +104,12 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
 }
 
 /** Narrow test seams for the two safety decisions this module owns. */
-export const internals = Object.freeze({ workspaceForSession, proposalTool })
+export const internals = Object.freeze({ workspaceForSession, proposalTool, proposalPolicy: PROPOSAL_POLICY })
 
 /**
- * Register the proposal tool into each eligible Agent scope before its first
- * session-start/model request. Sessions outside registered Workspaces receive no
- * tool at all. A cwd match is used as the creation-time fallback because the
+ * Register the proposal tool and its policy into each eligible Agent scope before
+ * the first session-start/model request. Sessions outside registered Workspaces
+ * receive neither. A cwd match is used as the creation-time fallback because the
  * Workspace session-id attachment may settle immediately after Agent publication.
  */
 export function installProjectMemoryProposalTool(ctx: Context): void {
@@ -115,6 +118,11 @@ export function installProjectMemoryProposalTool(ctx: Context): void {
       const workspace = workspaceForSession(memoryCtx, agent.id, agent.session.header.cwd)
       if (workspace === undefined) return
       agent.ctx.tools.register(proposalTool(memoryCtx, workspace.id, agent.id))
+      agent.ctx.systemPrompt.section({
+        name: 'yanami:project-memory-proposal-policy',
+        order: 98,
+        text: PROPOSAL_POLICY,
+      })
     })
   })
 }
