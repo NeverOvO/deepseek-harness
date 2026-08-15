@@ -76,11 +76,14 @@ function createWindowShell(): BrowserWindow {
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     show: false,
-    backgroundColor: '#f6fbff',
+    backgroundColor: '#171719',
     ...(isMac
       ? {
-        titleBarStyle: 'hiddenInset' as const,
-        trafficLightPosition: { x: 18, y: 18 },
+        // Keep the native macOS title bar until the Workbench client owns a
+        // dedicated drag/no-drag region. `hiddenInset` overlays the traffic
+        // lights on top of the upstream DSH sidebar, which makes the window
+        // hard to drag and collides with the DeepSeek brand mark.
+        titleBarStyle: 'default' as const,
       }
       : {}),
     webPreferences: {
