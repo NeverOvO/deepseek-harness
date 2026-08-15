@@ -41,10 +41,9 @@ jobs:
           node-version: '24'
           cache: pnpm
 
-      # The desktop workspace is new on this feature branch, so its Electron
-      # and Forge importers are not yet present in the checked-in lockfile.
-      # First validation intentionally resolves them; the resulting lockfile is
-      # uploaded below so it can be reviewed and committed after the lane is green.
+      # Desktop dependencies are still being introduced on this feature branch.
+      # Resolve them once on the macOS lane and upload the resulting lockfile so
+      # the reviewed result can be committed after packaging is green.
       - name: Install workspace dependencies
         run: pnpm install --no-frozen-lockfile
 
@@ -71,10 +70,14 @@ jobs:
         run: |
           find apps/desktop/out -maxdepth 5 -type d -name '*.app' -print
           test -n "$(find apps/desktop/out -maxdepth 5 -type d -name '*.app' -print -quit)"
+          test -f apps/desktop/out/Yanami-Workbench-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}.dmg
+          test -f apps/desktop/out/Yanami-Workbench-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}.zip
 
       - name: Upload macOS build
         uses: actions/upload-artifact@v4
         with:
           name: yanami-workbench-macos-unsigned
-          path: apps/desktop/out/make/**
+          path: |
+            apps/desktop/out/*.dmg
+            apps/desktop/out/*.zip
           if-no-files-found: error
