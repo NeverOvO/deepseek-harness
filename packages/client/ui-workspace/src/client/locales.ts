@@ -1,7 +1,7 @@
 /**
  * `workspace` namespace dictionaries: the browsing region (section header,
- * search, tree rows, dialogs) and the pick/add flow. Runtime failure
- * messages (wire error strings) pass through untranslated by policy.
+ * search, tree rows, dialogs), pick/add flow, and Project Memory editor.
+ * Runtime failure messages (wire error strings) pass through untranslated by policy.
  */
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
@@ -68,6 +68,20 @@ export const zh = {
   'time.months': '{n}个月',
   'time.years': '{n}年',
   'time.ago': '{t}前',
+  'memory.action': '项目记忆',
+  'memory.title': '项目记忆 · {name}',
+  'memory.description': '保存在 DSH 数据域中，不写入项目目录。保存后的内容会在后续模型请求中作为当前工作区的持久上下文。',
+  'memory.loading': '正在读取项目记忆…',
+  'memory.error': '项目记忆暂时不可用。',
+  'memory.retry': '重试',
+  'memory.save': '保存记忆',
+  'memory.section.architecture': '架构',
+  'memory.section.commands': '命令',
+  'memory.section.conventions': '约定',
+  'memory.section.decisions': '决策',
+  'memory.section.knownIssues': '已知问题',
+  'memory.section.definitionOfDone': '完成标准',
+  'memory.section.placeholder': '记录需要跨会话保留、并供后续任务参考的信息…',
 } satisfies Record<string, string>
 
 /** The workspace namespace key union. */
@@ -137,4 +151,18 @@ export const en = {
   'time.months': '{n}mo',
   'time.years': '{n}y',
   'time.ago': '{t} ago',
+  'memory.action': 'Project Memory',
+  'memory.title': 'Project Memory · {name}',
+  'memory.description': 'Stored in DSH data, never in the project directory. Saved content becomes durable workspace context for subsequent model requests.',
+  'memory.loading': 'Loading Project Memory…',
+  'memory.error': 'Project Memory is temporarily unavailable.',
+  'memory.retry': 'Retry',
+  'memory.save': 'Save memory',
+  'memory.section.architecture': 'Architecture',
+  'memory.section.commands': 'Commands',
+  'memory.section.conventions': 'Conventions',
+  'memory.section.decisions': 'Decisions',
+  'memory.section.knownIssues': 'Known Issues',
+  'memory.section.definitionOfDone': 'Definition of Done',
+  'memory.section.placeholder': 'Record durable information that should survive sessions and guide later work…',
 } satisfies Record<WorkspaceKey, string>
