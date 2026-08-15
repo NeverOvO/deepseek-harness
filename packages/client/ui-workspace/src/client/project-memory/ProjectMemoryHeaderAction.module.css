@@ -14,7 +14,7 @@
 
 .trigger:hover,
 .trigger[aria-expanded='true'] {
-  background: var(--dsw-alias-background-sunken);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -75,8 +75,4 @@
 
 .error {
   color: var(--dsw-alias-state-error-primary);
-}
-
-.footerSpacer {
-  flex: 1;
 }
