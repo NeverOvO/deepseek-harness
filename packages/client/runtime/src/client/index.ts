@@ -1,4 +1,4 @@
-/** Browser runtime services for slots, sessions, workspaces, and connection-stream delivery. */
+/** Browser runtime services for slots, sessions, workspaces, Project Memory, and connection-stream delivery. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: the ctx.remote merge. Deliberately the gateway's Client half rather
@@ -11,6 +11,7 @@ import { SlotRegistry } from './slots.ts'
 import { SessionRuntime } from './sessions/service.ts'
 import type { SessionListState } from './sessions/service.ts'
 import { WorkspaceRuntime } from './workspaces/service.ts'
+import { ProjectMemoryRuntime } from './project-memory/service.ts'
 import type { ConversationSnapshot } from './sessions/conversation.ts'
 import type { UseProjection } from './sessions/projection-store.ts'
 import { ConversationEventRegistry } from './conversation/event-registry.ts'
@@ -47,6 +48,10 @@ export { createScope } from './agents/scope.ts'
 export type { AgentScopeHandle } from './agents/scope.ts'
 export { DirectoryBrowseError, WorkspaceCreateError, WorkspaceRuntime } from './workspaces/service.ts'
 export { resolveWorkspacePath } from './workspaces/path.ts'
+export { ProjectMemoryController, ProjectMemoryRuntime } from './project-memory/service.ts'
+export type {
+  ProjectMemoryActionResult, ProjectMemoryLoadState, ProjectMemoryRemote, ProjectMemoryState,
+} from './project-memory/service.ts'
 // Contract only: the scope implementation and its Host transport belong to
 // dsh-client-ui-settings (see that package's settings-scope.ts).
 export type {
@@ -176,11 +181,13 @@ declare module '@deepseek-ai/cordis' {
     sessions: import('./contract/sessions.ts').ISessions
     /** The outward face only; the concrete service stays inside the runtime. */
     workspaces: import('./contract/workspaces.ts').IWorkspaces
+    /** Workspace-keyed Host-backed Project Memory caches. */
+    projectMemories: import('./project-memory/service.ts').ProjectMemoryRuntime
   }
 }
 
-/** Required services: the wire handle and Client Typert registry. */
-export const inject = ['connection', 'typert', 'remote', 'remote.commands']
+/** Required services: the wire handle, Client Typert registry, and selected Remote namespaces. */
+export const inject = ['connection', 'typert', 'remote', 'remote.commands', 'remote.projectMemory']
 
 /** Mounts the browser runtime services and connection stream.
  * @param ctx - Client Cordis context.
@@ -197,6 +204,8 @@ export function apply(ctx: Context): void {
     identity: candidate => sessions.scopeOf(candidate),
   })
   const workspaces = new WorkspaceRuntime(ctx, connection.api, sessions)
+  const projectMemories = new ProjectMemoryRuntime(ctx, ctx.remote.projectMemory)
+  ctx.effect(() => () => { projectMemories.dispose() }, 'runtime: Project Memory cache')
   ctx.effect(
     () => workspaces.startInitialSelection(),
     'runtime: initial Workspace selection',
