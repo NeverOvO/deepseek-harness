@@ -4,10 +4,36 @@
   grid-template-rows: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-yanami-workbench-bg);
   /* Collapse/expand animates the tracks on the deepsuite sider curve
      (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame::before,
+.frame::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(1px);
+  z-index: 0;
+}
+
+.frame::before {
+  width: 320px;
+  height: 320px;
+  right: -120px;
+  top: -140px;
+  background: var(--dsw-alias-yanami-lemon-soft);
+}
+
+.frame::after {
+  width: 260px;
+  height: 260px;
+  left: -110px;
+  bottom: -140px;
+  background: color-mix(in srgb, var(--dsw-alias-yanami-mint) 12%, transparent);
 }
 
 /* Dragging writes widths at pointer cadence; easing them would detach the
@@ -22,30 +48,41 @@
   }
 }
 
-.sidebarCol {
+.sidebarCol,
+.centerCol,
+.detailsCol {
+  position: relative;
+  z-index: 1;
   min-width: 0;
+  backdrop-filter: var(--dsw-alias-yanami-glass-blur);
+}
+
+.sidebarCol {
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
-  border-right: 1px solid var(--dsw-alias-border-l1);
+  border-right: 1px solid var(--dsw-alias-yanami-glass-border);
+  box-shadow: 10px 0 34px rgba(70, 117, 157, 0.05);
 }
 
 .centerCol {
-  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 82%, transparent);
 }
 
 .detailsCol {
-  min-width: 0;
   overflow: hidden;
-  border-left: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-yanami-glass-fill-strong);
+  border-left: 1px solid var(--dsw-alias-yanami-glass-border);
+  box-shadow: -10px 0 34px rgba(70, 117, 157, 0.04);
 }
 
 /* The details subtree stays mounted at zero width, so its border must not paint
    a 1px seam. The collapsed sidebar instead retains a bordered compact rail. */
 .frame[data-details-collapsed] .detailsCol {
   border-left: none;
+  box-shadow: none;
 }
 
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip
@@ -86,7 +123,8 @@
   border-radius: 10px;
   box-sizing: border-box;
   background: var(--dsw-alias-button-floating-fill);
-  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border: 1px solid var(--dsw-alias-yanami-glass-border);
+  box-shadow: var(--dsw-alias-yanami-card-shadow);
   /* Hover affordance: the details pill hides until the pointer is over its
      column, the strip itself, or a drag. */
   opacity: 0;
