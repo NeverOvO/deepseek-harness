@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { app } from 'electron'
 
@@ -54,7 +54,7 @@ function runtimeLauncher(): RuntimeLauncher {
     environment: {
       ...process.env,
       DSH_DESKTOP: '1',
-      PATH: inheritedPath === '' ? nodeBin : `${nodeBin}:${inheritedPath}`,
+      PATH: inheritedPath === '' ? nodeBin : `${nodeBin}${delimiter}${inheritedPath}`,
       ...(electronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
     },
   }
