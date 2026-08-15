@@ -23,6 +23,8 @@ interface Bench {
   stopped: number
 }
 
+type RemoteEventListener = (...args: unknown[]) => void
+
 async function mount(): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(TypertRegistry)
@@ -43,13 +45,33 @@ async function mount(): Promise<Bench> {
       return { stop: () => { bench.stopped += 1 } }
     },
   }
+  const listeners = new Map<string, Set<RemoteEventListener>>()
+  const remote = {
+    $on(event: string, listener: RemoteEventListener) {
+      let bucket = listeners.get(event)
+      if (bucket === undefined) {
+        bucket = new Set()
+        listeners.set(event, bucket)
+      }
+      bucket.add(listener)
+      return () => { bucket?.delete(listener) }
+    },
+    $dispatch(event: string, args: unknown[]) {
+      for (const listener of listeners.get(event) ?? []) listener(...args)
+    },
+  }
   ctx.reflect.provide('connection', handle)
-  ctx.reflect.provide('remote', {})
+  ctx.reflect.provide('remote', remote as never)
   ctx.reflect.provide('remote.commands', fakeRemote().commands)
   // Runtime now owns the Project Memory cache as a first-class Workbench
-  // service. These lifecycle tests do not exercise its transport, but the
-  // plugin must still see the same Remote namespace production supplies.
-  ctx.reflect.provide('remote.projectMemory', {} as never)
+  // service. The fake returns an authoritative empty review queue so forwarded
+  // Host invalidations can exercise the real controller refresh path.
+  ctx.reflect.provide('remote.projectMemory', {
+    listCandidates: async () => ({
+      ok: true,
+      value: { ok: true, value: { memory: null, candidates: [] } },
+    }),
+  } as never)
   await ctx.plugin(RuntimeClient).await()
   return bench
 }
@@ -96,6 +118,28 @@ describe('runtime client apply', () => {
     // Mux sink and onConnected route without throwing (manager semantics own the behavior).
     bench.sinks?.onMuxEnvelope?.({ rpcId: 'r2' as never, payload: { type: 'stream/error', message: 'x' } as never })
     bench.sinks?.onConnected?.({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true })
+  })
+
+  it('refreshes the authoritative candidate queue from a forwarded Host invalidation event', async () => {
+    const bench = await mount()
+    const controller = bench.ctx.projectMemories.forWorkspace('w-memory' as never)
+    expect(controller.getCandidateSnapshot().state).toBe('cold')
+
+    bench.sinks?.onHostEnvelope?.({
+      rpcId: 'r-memory-event' as never,
+      payload: {
+        type: 'host/remote-event',
+        event: 'project-memory/candidates-changed',
+        args: ['w-memory'],
+      } as never,
+    })
+    await flushMicrotasks()
+
+    expect(controller.getCandidateSnapshot()).toEqual({
+      state: 'ready',
+      candidates: [],
+      error: null,
+    })
   })
 
   it('selects the recent Workspace once when the first baselines have no current session', async () => {
