@@ -41,7 +41,7 @@ describe('Project Memory proposal safety boundary', () => {
       createdAt: '2026-08-15T00:00:00.000Z',
     }))
     const ctx = new Context()
-    ctx.provide('projectMemory', { proposeCandidate } as never)
+    ctx.provide('projectMemory', { proposeCandidate, candidates: () => [] } as never)
 
     const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
     expect(tool.name).toBe(PROJECT_MEMORY_PROPOSE_TOOL)
@@ -66,21 +66,41 @@ describe('Project Memory proposal safety boundary', () => {
       WORKSPACE_ID,
       'decisions',
       'WorkspaceId is the durable project key.',
-      'session',
+      'automatic',
       'session-1',
     )
   })
 
-  it('rejects empty and oversized candidate text before persistence', async () => {
+  it('rejects empty, oversized, and credential-bearing candidate text before persistence', async () => {
     const proposeCandidate = vi.fn()
     const ctx = new Context()
-    ctx.provide('projectMemory', { proposeCandidate } as never)
+    ctx.provide('projectMemory', { proposeCandidate, candidates: () => [] } as never)
     const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
 
     await expect(tool.execute({ section: 'commands', text: '   ' }, {} as never))
       .rejects.toThrow(/must not be empty/)
     await expect(tool.execute({ section: 'commands', text: 'x'.repeat(8_001) }, {} as never))
       .rejects.toThrow(/exceeds 8000 characters/)
+    await expect(tool.execute({ section: 'commands', text: 'API_KEY=sk-proj-abcdefghijklmnopqrstuv' }, {} as never))
+      .rejects.toThrow(/credential or secret/)
+    expect(internals.containsSensitiveText('token: abcdefghijklmnop')).toBe(true)
+    expect(internals.containsSensitiveText('Run pnpm run constraints after code changes.')).toBe(false)
+    expect(proposeCandidate).not.toHaveBeenCalled()
+  })
+
+  it('caps automatic pending candidates per Workspace', async () => {
+    const proposeCandidate = vi.fn()
+    const ctx = new Context()
+    ctx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => Array.from({ length: 100 }, (_, index) => ({ id: `candidate-${String(index)}` })),
+    } as never)
+    const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
+
+    await expect(tool.execute({
+      section: 'knownIssues',
+      text: 'Windows desktop still needs verification.',
+    }, {} as never)).rejects.toThrow(/100 candidates pending review/)
     expect(proposeCandidate).not.toHaveBeenCalled()
   })
 
