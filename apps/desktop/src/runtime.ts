@@ -11,18 +11,42 @@ export interface DesktopRuntime {
   readonly process: ChildProcessWithoutNullStreams
 }
 
+interface RuntimeLauncher {
+  readonly executable: string
+  readonly environment: NodeJS.ProcessEnv
+}
+
 function resolveDshCliEntry(): string {
   const require = createRequire(import.meta.url)
   const manifest = require.resolve('@deepseek-ai/dsh/package.json')
   return join(dirname(manifest), 'lib', 'bin.js')
 }
 
-function runtimeEnvironment(): NodeJS.ProcessEnv {
+/**
+ * In a checkout, prefer pnpm/npm's system Node so native DSH dependencies keep
+ * the ABI they were installed for. A packaged app has no package-manager Node,
+ * so it reuses Electron's executable in ELECTRON_RUN_AS_NODE mode; Forge
+ * rebuilds packaged native dependencies for that Electron ABI.
+ */
+function runtimeLauncher(): RuntimeLauncher {
+  const configured = process.env.DSH_DESKTOP_NODE
+  const inheritedNode = process.env.npm_node_execpath
+  const executable = configured ?? inheritedNode ?? process.execPath
+  const electronAsNode = executable === process.execPath
+
   return {
-    ...process.env,
-    ELECTRON_RUN_AS_NODE: '1',
-    DSH_DESKTOP: '1',
+    executable,
+    environment: {
+      ...process.env,
+      DSH_DESKTOP: '1',
+      ...(electronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+    },
   }
+}
+
+/** Extract the canonical loopback URL from accumulated DSH stdout. */
+export function parseRuntimeReadyUrl(output: string): string | undefined {
+  return READY_PATTERN.exec(output)?.[1]
 }
 
 /**
@@ -31,11 +55,12 @@ function runtimeEnvironment(): NodeJS.ProcessEnv {
  */
 export async function startDesktopRuntime(): Promise<DesktopRuntime> {
   const entry = resolveDshCliEntry()
+  const launcher = runtimeLauncher()
   const child = spawn(
-    process.execPath,
+    launcher.executable,
     [entry, 'web', '--host', '127.0.0.1', '--port', '0'],
     {
-      env: runtimeEnvironment(),
+      env: launcher.environment,
       stdio: 'pipe',
     },
   )
@@ -45,23 +70,28 @@ export async function startDesktopRuntime(): Promise<DesktopRuntime> {
   let stderr = ''
 
   const ready = new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error(
-        `Timed out waiting for DSH runtime readiness.${stderr === '' ? '' : `\n${stderr.trim()}`}`,
-      ))
-    }, START_TIMEOUT_MS)
-
+    let settled = false
     const settle = (callback: () => void): void => {
+      if (settled) return
+      settled = true
       clearTimeout(timeout)
       callback()
     }
+
+    const timeout = setTimeout(() => {
+      settle(() => {
+        reject(new Error(
+          `Timed out waiting for DSH runtime readiness.${stderr === '' ? '' : `\n${stderr.trim()}`}`,
+        ))
+      })
+    }, START_TIMEOUT_MS)
 
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk
       process.stdout.write(`[dsh] ${chunk}`)
-      const match = READY_PATTERN.exec(stdout)
-      if (match?.[1] !== undefined) settle(() => { resolve(match[1]) })
+      const url = parseRuntimeReadyUrl(stdout)
+      if (url !== undefined) settle(() => { resolve(url) })
       if (stdout.length > 32_768) stdout = stdout.slice(-16_384)
     })
 
