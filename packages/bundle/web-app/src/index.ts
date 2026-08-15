@@ -19,8 +19,9 @@ import { addHarnessSourceSection } from '@deepseek-ai/dsh-app-boot'
 import * as FrontendStatic from '@deepseek-ai/dsh-host-frontend-static'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import type {} from '@deepseek-ai/dsh-system-prompt'
+import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-shell-env'
+import { renderProjectMemoryContext } from '@deepseek-ai/dsh-workspace/project-memory'
 
 /** Stable Cordis plugin name. */
 export const name = 'web-app'
@@ -30,6 +31,8 @@ const SOURCE_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 
 /** Runtime service that releases Web rows after bind-dependent values resolve. */
 const WEB_RUNTIME_SERVICE = 'webRuntime'
+/** Dynamic context name used for the current workspace's durable Project Memory. */
+const PROJECT_MEMORY_CONTEXT = 'yanami:project-memory'
 
 /** Services required before the web runtime can mount. */
 export const inject = ['webServer']
@@ -127,6 +130,47 @@ function resolveDistIndex(): string {
 export const internals: { resolveDistIndex: () => string } = { resolveDistIndex }
 
 /**
+ * Append the current workspace's durable Project Memory to one assembled model
+ * context. `cwd` is read from the already-resolved prompt variables, avoiding
+ * a dependency on the Agent package's AssembleContext augmentation.
+ * @param ctx - host context carrying optional Workspace/Project Memory services.
+ * @param assembly - post-waterfall assembly to enrich.
+ * @returns the original assembly when no current Project Memory applies, otherwise a copied assembly with one context row appended.
+ */
+export async function appendProjectMemoryContext(
+  ctx: Context,
+  assembly: PromptAssembly,
+): Promise<PromptAssembly> {
+  const cwd = assembly.variables.cwd
+  const registry = ctx.get('workspaceRegistry')
+  const projectMemory = ctx.get('projectMemory')
+  if (cwd === undefined || registry === undefined || projectMemory === undefined) return assembly
+
+  let workspace = registry.list().find(candidate => candidate.path === cwd)
+  if (workspace === undefined) {
+    try {
+      workspace = await registry.resolveByPath(cwd)
+    } catch {
+      return assembly
+    }
+  }
+  if (workspace === undefined) return assembly
+
+  const memory = projectMemory.get(workspace.id)
+  if (memory === undefined) return assembly
+  const text = renderProjectMemoryContext(memory)
+  if (text.length === 0) return assembly
+
+  return {
+    ...assembly,
+    contexts: [
+      ...assembly.contexts.filter(context => context.name !== PROJECT_MEMORY_CONTEXT),
+      { name: PROJECT_MEMORY_CONTEXT, text },
+    ],
+  }
+}
+
+/**
  * Mount the Web runtime: dist serving, surface prompt, the bash runtime
  * variable, and the URL line.
  * @param ctx - plugin context carrying the webServer service.
@@ -144,6 +188,10 @@ export function apply(ctx: Context, config: Config): void {
         name: 'app:web-surface',
         order: -98,
         text: () => webSurfacePrompt(localWebUrl(promptCtx)),
+      })
+      promptCtx.on('system-prompt/assemble', async (assembly, _context, next) => {
+        const transformed = await next()
+        return await appendProjectMemoryContext(promptCtx, transformed)
       })
     })
     ctx.inject(['shellEnv'], (runtimeCtx) => {

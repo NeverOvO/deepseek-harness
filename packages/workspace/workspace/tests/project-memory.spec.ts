@@ -9,6 +9,7 @@ import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-
 import WorkspaceRegistry, { WorkspaceId } from '../src/index.ts'
 import ProjectMemoryService, {
   ProjectMemoryUnknownWorkspaceError,
+  renderProjectMemoryContext,
 } from '../src/project-memory.ts'
 
 async function harness(pool = new MemoryMediaPool()) {
@@ -105,6 +106,30 @@ describe('ProjectMemoryService', () => {
 
     await second.memoryFiber.dispose()
     await second.workspaceFiber.dispose()
+  })
+
+  it('renders only populated sections in canonical model-context order', async () => {
+    const result = await harness()
+    const workspace = await result.registry.create(await makeDir('render'))
+    const memory = await result.memory.replace(workspace.id, {
+      ...result.memory.empty(),
+      commands: 'pnpm run build',
+      decisions: 'Keep Project Memory outside the repository.',
+      definitionOfDone: 'All gates are green.',
+    })
+    expect(memory).toBeDefined()
+
+    const rendered = renderProjectMemoryContext(memory!)
+    expect(rendered).toContain('Yanami Project Memory')
+    expect(rendered).toContain('## Commands\npnpm run build')
+    expect(rendered).toContain('## Decisions\nKeep Project Memory outside the repository.')
+    expect(rendered).toContain('## Definition of Done\nAll gates are green.')
+    expect(rendered).not.toContain('## Architecture')
+    expect(rendered.indexOf('## Commands')).toBeLessThan(rendered.indexOf('## Decisions'))
+    expect(rendered.indexOf('## Decisions')).toBeLessThan(rendered.indexOf('## Definition of Done'))
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
   })
 
   it('rejects writes to unknown workspaces and deletes empty records', async () => {

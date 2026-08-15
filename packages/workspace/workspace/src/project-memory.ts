@@ -12,7 +12,7 @@ import { z } from 'zod'
 import type { WorkspaceId } from './types.ts'
 import type { WorkspaceRegistry } from './index.ts'
 
-/** Stable section order used by persistence, UI projections, and later prompt assembly. */
+/** Stable section order used by persistence, UI projections, and prompt assembly. */
 export const projectMemorySectionNames = [
   'architecture',
   'commands',
@@ -106,6 +106,15 @@ const EMPTY_SECTIONS: ProjectMemorySections = Object.freeze({
   definitionOfDone: '',
 })
 
+const PROJECT_MEMORY_HEADINGS: Readonly<Record<ProjectMemorySection, string>> = Object.freeze({
+  architecture: 'Architecture',
+  commands: 'Commands',
+  conventions: 'Conventions',
+  decisions: 'Decisions',
+  knownIssues: 'Known Issues',
+  definitionOfDone: 'Definition of Done',
+})
+
 function sectionsSnapshot(sections: ProjectMemorySections): ProjectMemorySections {
   return Object.freeze({
     architecture: sections.architecture,
@@ -132,6 +141,26 @@ function hasContent(sections: ProjectMemorySections): boolean {
 
 function normalizeSectionText(text: string): string {
   return text.trim().length === 0 ? '' : text
+}
+
+/**
+ * Render the model-facing Project Memory snapshot. Empty sections are omitted
+ * to avoid wasting context tokens while the canonical section order remains stable.
+ * @param memory - immutable workspace memory snapshot.
+ * @returns durable context text, or an empty string when every section is empty.
+ */
+export function renderProjectMemoryContext(memory: ProjectMemory): string {
+  const sections = projectMemorySectionNames.flatMap((section) => {
+    const text = memory.sections[section]
+    if (text.trim().length === 0) return []
+    return [`## ${PROJECT_MEMORY_HEADINGS[section]}\n${text}`]
+  })
+  if (sections.length === 0) return ''
+  return [
+    'Yanami Project Memory — durable workspace context stored by DSH outside the user repository. '
+      + 'Use it as remembered project guidance and verify it against current files when facts may have changed.',
+    ...sections,
+  ].join('\n\n')
 }
 
 declare module '@deepseek-ai/cordis' {
