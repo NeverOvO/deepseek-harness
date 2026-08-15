@@ -108,6 +108,37 @@ describe('ProjectMemoryService', () => {
     await second.workspaceFiber.dispose()
   })
 
+  it('persists pending candidates separately and never promotes them on restart', async () => {
+    const pool = new MemoryMediaPool()
+    const path = await makeDir('candidate-persistent')
+    const first = await harness(pool)
+    const workspace = await first.registry.create(path)
+    await first.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Review before committing this decision.',
+      'session',
+      'session-1',
+    )
+    expect(first.memory.get(workspace.id)).toBeUndefined()
+    expect(first.pool.media.get('project_memory_candidates')!.tables.get('candidates')!.size).toBe(1)
+    await first.memoryFiber.dispose()
+    await first.workspaceFiber.dispose()
+
+    const second = await harness(pool)
+    expect(second.memory.get(workspace.id)).toBeUndefined()
+    expect(second.memory.candidates(workspace.id)).toMatchObject([{
+      workspaceId: workspace.id,
+      section: 'decisions',
+      text: 'Review before committing this decision.',
+      source: 'session',
+      sourceRef: 'session-1',
+    }])
+
+    await second.memoryFiber.dispose()
+    await second.workspaceFiber.dispose()
+  })
+
   it('renders only populated sections in canonical model-context order', async () => {
     const result = await harness()
     const workspace = await result.registry.create(await makeDir('render'))
@@ -151,15 +182,24 @@ describe('ProjectMemoryService', () => {
     await result.workspaceFiber.dispose()
   })
 
-  it('cleans the sidecar row when Workspace Core deletes its owner', async () => {
+  it('cleans committed and pending sidecars when Workspace Core deletes their owner', async () => {
     const result = await harness()
     const workspace = await result.registry.create(await makeDir('delete-owner'))
     await result.memory.setSection(workspace.id, 'definitionOfDone', 'All gates green.')
+    await result.memory.proposeCandidate(
+      workspace.id,
+      'knownIssues',
+      'Candidate must disappear with its owner.',
+      'manual',
+      null,
+    )
     expect(result.memory.get(workspace.id)).toBeDefined()
+    expect(result.memory.candidates(workspace.id)).toHaveLength(1)
 
     await result.registry.delete(workspace.id)
     await vi.waitFor(() => {
       expect(result.memory.get(workspace.id)).toBeUndefined()
+      expect(result.memory.candidates(workspace.id)).toHaveLength(0)
     })
 
     await result.memoryFiber.dispose()
