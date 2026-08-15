@@ -5,6 +5,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {
+  ProjectMemoryCandidateQueueResult,
+  ProjectMemoryCandidateSource,
+  ProjectMemoryCandidateView,
   ProjectMemoryClearResult,
   ProjectMemoryReadResult,
   ProjectMemorySection,
@@ -29,15 +32,38 @@ export interface ProjectMemoryRemote {
     sections: ProjectMemorySectionsView
   }): Promise<RemoteResult<ProjectMemoryReadResult>>
   clear(request: { workspaceId: WorkspaceId }): Promise<RemoteResult<ProjectMemoryClearResult>>
+  listCandidates(request: { workspaceId: WorkspaceId }): Promise<RemoteResult<ProjectMemoryCandidateQueueResult>>
+  proposeCandidate(request: {
+    workspaceId: WorkspaceId
+    section: ProjectMemorySection
+    text: string
+    source: ProjectMemoryCandidateSource
+    sourceRef: string | null
+  }): Promise<RemoteResult<ProjectMemoryCandidateQueueResult>>
+  acceptCandidate(request: {
+    workspaceId: WorkspaceId
+    candidateId: string
+  }): Promise<RemoteResult<ProjectMemoryCandidateQueueResult>>
+  rejectCandidate(request: {
+    workspaceId: WorkspaceId
+    candidateId: string
+  }): Promise<RemoteResult<ProjectMemoryCandidateQueueResult>>
 }
 
 /** Lifecycle of one Workspace's client-side Project Memory cache. */
 export type ProjectMemoryLoadState = 'cold' | 'loading' | 'ready' | 'error'
 
-/** Immutable UI projection for one Workspace's Project Memory. */
+/** Immutable UI projection for one Workspace's committed Project Memory. */
 export interface ProjectMemoryState {
   readonly state: ProjectMemoryLoadState
   readonly memory: ProjectMemoryView | null
+  readonly error: string | null
+}
+
+/** Immutable UI projection for one Workspace's pending review queue. */
+export interface ProjectMemoryCandidateState {
+  readonly state: ProjectMemoryLoadState
+  readonly candidates: readonly ProjectMemoryCandidateView[]
   readonly error: string | null
 }
 
@@ -54,12 +80,14 @@ function failure(code: string, message: string): ProjectMemoryActionResult {
 
 function businessMessage(code: string): string {
   if (code === 'workspace-not-found') return 'this workspace is no longer registered'
+  if (code === 'candidate-not-found') return 'this Project Memory candidate is no longer pending'
   return code
 }
 
 /**
- * Per-Workspace observable controller. Mutations serialize behind the latest
- * operation so later edits always apply after the previous Host result.
+ * Per-Workspace observable controller. Committed memory and pending candidate
+ * queue use independent snapshots while every mutation shares one operation
+ * tail, so accepting a candidate cannot race an editor save.
  */
 export class ProjectMemoryController implements ObservableSnapshot<ProjectMemoryState> {
   private readonly store: SnapshotStore<ProjectMemoryState> = createSnapshotStore({
@@ -67,7 +95,13 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     memory: null,
     error: null,
   })
+  private readonly candidateStore: SnapshotStore<ProjectMemoryCandidateState> = createSnapshotStore({
+    state: 'cold',
+    candidates: Object.freeze([]),
+    error: null,
+  })
   private loadPromise: Promise<ProjectMemoryActionResult> | null = null
+  private candidateLoadPromise: Promise<ProjectMemoryActionResult> | null = null
   private operationTail: Promise<void> = Promise.resolve()
   private disposed = false
 
@@ -78,14 +112,22 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
 
   getSnapshot = (): ProjectMemoryState => this.store.getSnapshot()
   subscribe = (listener: () => void): (() => void) => this.store.subscribe(listener)
+  getCandidateSnapshot = (): ProjectMemoryCandidateState => this.candidateStore.getSnapshot()
+  subscribeCandidates = (listener: () => void): (() => void) => this.candidateStore.subscribe(listener)
 
-  /** Load once unless a reconnect invalidated the cache. */
+  /** Load committed memory once unless reconnect invalidated the cache. */
   ensure(): Promise<ProjectMemoryActionResult> {
     if (this.store.getSnapshot().state === 'ready') return Promise.resolve(OK)
     return this.refresh()
   }
 
-  /** Re-read the Host-authoritative memory, collapsing concurrent loads. */
+  /** Load the candidate queue once unless reconnect invalidated it. */
+  ensureCandidates(): Promise<ProjectMemoryActionResult> {
+    if (this.candidateStore.getSnapshot().state === 'ready') return Promise.resolve(OK)
+    return this.refreshCandidates()
+  }
+
+  /** Re-read Host-authoritative committed memory, collapsing concurrent loads. */
   refresh(): Promise<ProjectMemoryActionResult> {
     if (this.loadPromise !== null) return this.loadPromise
     if (this.disposed) return Promise.resolve(failure('disposed', 'Project Memory controller is disposed'))
@@ -96,7 +138,18 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     return pending.finally(() => { this.loadPromise = null })
   }
 
-  /** Replace one canonical section after seeding the current Host state. */
+  /** Re-read the Host-authoritative pending candidate queue. */
+  refreshCandidates(): Promise<ProjectMemoryActionResult> {
+    if (this.candidateLoadPromise !== null) return this.candidateLoadPromise
+    if (this.disposed) return Promise.resolve(failure('disposed', 'Project Memory controller is disposed'))
+    const current = this.candidateStore.getSnapshot()
+    this.candidateStore.set({ state: 'loading', candidates: current.candidates, error: null })
+    const pending = this.loadCandidates()
+    this.candidateLoadPromise = pending
+    return pending.finally(() => { this.candidateLoadPromise = null })
+  }
+
+  /** Replace one canonical section after seeding current Host state. */
   setSection(section: ProjectMemorySection, text: string): Promise<ProjectMemoryActionResult> {
     return this.mutate(async () => this.commitRead(await this.remote.setSection({
       workspaceId: this.workspaceId,
@@ -113,7 +166,7 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     })))
   }
 
-  /** Remove the durable Project Memory row for this Workspace. */
+  /** Remove the durable committed Project Memory row for this Workspace. */
   clear(): Promise<ProjectMemoryActionResult> {
     return this.mutate(async () => {
       const carried = await this.remote.clear({ workspaceId: this.workspaceId })
@@ -127,11 +180,45 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     })
   }
 
-  /** Mark cached state stale after connection generation replacement. */
+  /** Stage a candidate for human review without changing committed memory. */
+  proposeCandidate(
+    section: ProjectMemorySection,
+    text: string,
+    source: ProjectMemoryCandidateSource = 'manual',
+    sourceRef: string | null = null,
+  ): Promise<ProjectMemoryActionResult> {
+    return this.mutateCandidates(async () => this.commitCandidateQueue(await this.remote.proposeCandidate({
+      workspaceId: this.workspaceId,
+      section,
+      text,
+      source,
+      sourceRef,
+    })))
+  }
+
+  /** Accept one candidate into durable memory. */
+  acceptCandidate(candidateId: string): Promise<ProjectMemoryActionResult> {
+    return this.mutateCandidates(async () => this.commitCandidateQueue(await this.remote.acceptCandidate({
+      workspaceId: this.workspaceId,
+      candidateId,
+    })))
+  }
+
+  /** Reject one candidate without touching durable memory. */
+  rejectCandidate(candidateId: string): Promise<ProjectMemoryActionResult> {
+    return this.mutateCandidates(async () => this.commitCandidateQueue(await this.remote.rejectCandidate({
+      workspaceId: this.workspaceId,
+      candidateId,
+    })))
+  }
+
+  /** Mark all Host-derived snapshots stale after connection generation replacement. */
   invalidate(): void {
     if (this.disposed) return
     const current = this.store.getSnapshot()
     this.store.set({ state: 'cold', memory: current.memory, error: null })
+    const candidates = this.candidateStore.getSnapshot()
+    this.candidateStore.set({ state: 'cold', candidates: candidates.candidates, error: null })
   }
 
   dispose(): void {
@@ -146,6 +233,18 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
       const message = error instanceof Error ? error.message : 'Project Memory load failed'
       const current = this.store.getSnapshot()
       this.store.set({ state: 'error', memory: current.memory, error: message })
+      return failure('transport', message)
+    }
+  }
+
+  private async loadCandidates(): Promise<ProjectMemoryActionResult> {
+    try {
+      return await this.commitCandidateQueue(await this.remote.listCandidates({ workspaceId: this.workspaceId }))
+    } catch (error) {
+      if (this.disposed) return OK
+      const message = error instanceof Error ? error.message : 'Project Memory candidate load failed'
+      const current = this.candidateStore.getSnapshot()
+      this.candidateStore.set({ state: 'error', candidates: current.candidates, error: message })
       return failure('transport', message)
     }
   }
@@ -168,6 +267,31 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
     return OK
   }
 
+  private commitCandidateQueue(
+    carried: RemoteResult<ProjectMemoryCandidateQueueResult>,
+  ): ProjectMemoryActionResult {
+    if (this.disposed) return OK
+    if (!carried.ok) {
+      const current = this.candidateStore.getSnapshot()
+      this.candidateStore.set({ state: 'error', candidates: current.candidates, error: carried.error.message })
+      return failure(carried.error.code, carried.error.message)
+    }
+    if (!carried.value.ok) {
+      const code = carried.value.error.code
+      const message = businessMessage(code)
+      const current = this.candidateStore.getSnapshot()
+      this.candidateStore.set({ state: 'error', candidates: current.candidates, error: message })
+      return failure(code, message)
+    }
+    this.store.set({ state: 'ready', memory: carried.value.value.memory, error: null })
+    this.candidateStore.set({
+      state: 'ready',
+      candidates: Object.freeze([...carried.value.value.candidates]),
+      error: null,
+    })
+    return OK
+  }
+
   private mutate(operation: () => Promise<ProjectMemoryActionResult>): Promise<ProjectMemoryActionResult> {
     const guarded = async (): Promise<ProjectMemoryActionResult> => {
       if (this.disposed) return failure('disposed', 'Project Memory controller is disposed')
@@ -178,6 +302,24 @@ export class ProjectMemoryController implements ObservableSnapshot<ProjectMemory
         return await operation()
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Project Memory mutation failed'
+        return failure('transport', message)
+      }
+    }
+    const result = this.operationTail.then(guarded, guarded)
+    this.operationTail = result.then(() => undefined, () => undefined)
+    return result
+  }
+
+  private mutateCandidates(operation: () => Promise<ProjectMemoryActionResult>): Promise<ProjectMemoryActionResult> {
+    const guarded = async (): Promise<ProjectMemoryActionResult> => {
+      if (this.disposed) return failure('disposed', 'Project Memory controller is disposed')
+      const seeded = await this.ensureCandidates()
+      if (!seeded.ok) return seeded
+      if (this.disposed) return failure('disposed', 'Project Memory controller is disposed')
+      try {
+        return await operation()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Project Memory candidate mutation failed'
         return failure('transport', message)
       }
     }
