@@ -8,6 +8,7 @@ import {
   IconChevronDownOutline14, IconFolderClose16, IconFolderOpen16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-client-runtime/client'
+import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import type { ConversationSlotProps } from '../contract/slots.ts'
 import { YanamiHome } from '../chat/YanamiHome.tsx'
 import css from './HeroShell.module.css'
@@ -83,6 +84,10 @@ export interface HeroShellProps {
   children?: ReactNode
   cwd?: string
   sessionCount?: number
+  activeMode?: YanamiMode
+  switchingMode?: YanamiMode
+  modeError?: string
+  onModeSelect?: (mode: YanamiMode) => void
 }
 
 /**
@@ -90,10 +95,19 @@ export interface HeroShellProps {
  * the real composer immediately below this surface, so the dashboard is
  * presentation rather than a second workflow implementation.
  */
-export function HeroShell({ children, cwd, sessionCount }: HeroShellProps) {
+export function HeroShell({
+  children, cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect,
+}: HeroShellProps) {
   return (
     <div className={css.root}>
-      <YanamiHome cwd={cwd} sessionCount={sessionCount} />
+      <YanamiHome
+        cwd={cwd}
+        sessionCount={sessionCount}
+        activeMode={activeMode}
+        switchingMode={switchingMode}
+        modeError={modeError}
+        onModeSelect={onModeSelect}
+      />
       {children}
     </div>
   )
