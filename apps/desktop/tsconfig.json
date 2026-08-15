@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "composite": false,
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "types": ["node", "electron"]
+  },
+  "include": ["src/**/*.ts"]
+}
