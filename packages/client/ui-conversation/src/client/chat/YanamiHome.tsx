@@ -2,7 +2,7 @@ import css from './YanamiHome.module.css'
 
 export interface YanamiHomeProps {
   cwd?: string
-  sessionCount: number
+  sessionCount?: number
 }
 
 const MODES = [
@@ -14,13 +14,13 @@ const MODES = [
 ] as const
 
 function projectName(cwd?: string): string {
-  if (cwd === undefined || cwd.trim() === '') return '未绑定工作区'
+  if (cwd === undefined || cwd.trim() === '') return '选择工作区后载入'
   const segments = cwd.replaceAll('\\', '/').split('/').filter(Boolean)
   return segments.at(-1) ?? cwd
 }
 
 /** Blank-session landing surface for Yanami Workbench. */
-export function YanamiHome({ cwd, sessionCount }: YanamiHomeProps) {
+export function YanamiHome({ cwd, sessionCount }: YanamiHomeProps = {}) {
   const project = projectName(cwd)
 
   return (
@@ -37,7 +37,7 @@ export function YanamiHome({ cwd, sessionCount }: YanamiHomeProps) {
             </div>
             <div className={css.metaCard}>
               <span>会话资产</span>
-              <strong>{sessionCount}</strong>
+              <strong>{sessionCount ?? '自动整理'}</strong>
             </div>
             <div className={css.metaCard}>
               <span>默认策略</span>
