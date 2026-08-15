@@ -1,0 +1,83 @@
+import { describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
+import { internals, PROJECT_MEMORY_PROPOSE_TOOL } from '../src/project-memory-proposal.ts'
+
+const WORKSPACE_ID = WorkspaceId('workspace-1')
+const workspace = {
+  id: WORKSPACE_ID,
+  path: '/projects/one',
+  title: 'one',
+  sessionIds: ['session-attached'],
+  status: 'active',
+  createdAt: '2026-08-15T00:00:00.000Z',
+  updatedAt: '2026-08-15T00:00:00.000Z',
+}
+
+describe('Project Memory proposal safety boundary', () => {
+  it('resolves only an already-registered Workspace by attachment or exact cwd', () => {
+    const ctx = new Context()
+    ctx.provide('workspaceRegistry', { list: () => [workspace] } as never)
+
+    expect(internals.workspaceForSession(ctx, 'session-attached', undefined)?.id).toBe(WORKSPACE_ID)
+    expect(internals.workspaceForSession(ctx, 'session-new', '/projects/one')?.id).toBe(WORKSPACE_ID)
+    expect(internals.workspaceForSession(ctx, 'session-new', '/projects/other')).toBeUndefined()
+  })
+
+  it('does not expose workspace identity or commit operations to the model', async () => {
+    const proposeCandidate = vi.fn(async (
+      workspaceId: typeof WORKSPACE_ID,
+      section: string,
+      text: string,
+      source: string,
+      sourceRef: string,
+    ) => ({
+      id: 'candidate-1',
+      workspaceId,
+      section,
+      text,
+      source,
+      sourceRef,
+      createdAt: '2026-08-15T00:00:00.000Z',
+    }))
+    const ctx = new Context()
+    ctx.provide('projectMemory', { proposeCandidate } as never)
+
+    const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
+    expect(tool.name).toBe(PROJECT_MEMORY_PROPOSE_TOOL)
+    expect(Object.keys((tool.parameters as { properties: Record<string, unknown> }).properties).sort())
+      .toEqual(['section', 'text'])
+    expect(JSON.stringify(tool.parameters)).not.toContain('workspaceId')
+    expect(tool.description).toContain('human review')
+    expect(tool.description).toContain('never commits Project Memory')
+
+    await expect(tool.execute({
+      section: 'decisions',
+      text: 'WorkspaceId is the durable project key.',
+    }, {} as never)).resolves.toEqual({
+      candidateId: 'candidate-1',
+      section: 'decisions',
+      status: 'pending-review',
+    })
+    expect(proposeCandidate).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      'decisions',
+      'WorkspaceId is the durable project key.',
+      'session',
+      'session-1',
+    )
+  })
+
+  it('rejects empty and oversized candidate text before persistence', async () => {
+    const proposeCandidate = vi.fn()
+    const ctx = new Context()
+    ctx.provide('projectMemory', { proposeCandidate } as never)
+    const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
+
+    await expect(tool.execute({ section: 'commands', text: '   ' }, {} as never))
+      .rejects.toThrow(/must not be empty/)
+    await expect(tool.execute({ section: 'commands', text: 'x'.repeat(8_001) }, {} as never))
+      .rejects.toThrow(/exceeds 8000 characters/)
+    expect(proposeCandidate).not.toHaveBeenCalled()
+  })
+})
