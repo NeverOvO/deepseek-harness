@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
+import { app } from 'electron'
 
 const READY_PATTERN = /dsh web:\s+(http:\/\/127\.0\.0\.1:\d+)/
 const START_TIMEOUT_MS = 45_000
@@ -22,23 +24,37 @@ function resolveDshCliEntry(): string {
   return join(dirname(manifest), 'lib', 'bin.js')
 }
 
+function packagedNodeExecutable(): string {
+  const executable = process.platform === 'win32'
+    ? join(process.resourcesPath, 'node-runtime', 'node.exe')
+    : join(process.resourcesPath, 'node-runtime', 'bin', 'node')
+  if (!existsSync(executable)) {
+    throw new Error(`Bundled Node runtime is missing: ${executable}`)
+  }
+  return executable
+}
+
 /**
- * In a checkout, prefer pnpm/npm's system Node so native DSH dependencies keep
- * the ABI they were installed for. A packaged app has no package-manager Node,
- * so it reuses Electron's executable in ELECTRON_RUN_AS_NODE mode; Forge
- * rebuilds packaged native dependencies for that Electron ABI.
+ * Source checkouts inherit pnpm/npm's system Node so native DSH dependencies
+ * keep the ABI they were installed for. Packaged apps use a standard Node LTS
+ * sidecar copied into Electron resources; DSH native modules therefore never
+ * need to be rebuilt against Electron's ABI.
  */
 function runtimeLauncher(): RuntimeLauncher {
   const configured = process.env.DSH_DESKTOP_NODE
   const inheritedNode = process.env.npm_node_execpath
-  const executable = configured ?? inheritedNode ?? process.execPath
-  const electronAsNode = executable === process.execPath
+  const executable = configured
+    ?? (app.isPackaged ? packagedNodeExecutable() : inheritedNode ?? process.execPath)
+  const electronAsNode = !app.isPackaged && executable === process.execPath
+  const nodeBin = dirname(executable)
+  const inheritedPath = process.env.PATH ?? ''
 
   return {
     executable,
     environment: {
       ...process.env,
       DSH_DESKTOP: '1',
+      PATH: inheritedPath === '' ? nodeBin : `${nodeBin}:${inheritedPath}`,
       ...(electronAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
     },
   }
