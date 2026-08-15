@@ -139,6 +139,7 @@ export const internals = Object.freeze({
   workspaceForSession,
   proposalTool,
   proposalPolicy: PROPOSAL_POLICY,
+  installCandidateChangeBridge,
 })
 
 /**
