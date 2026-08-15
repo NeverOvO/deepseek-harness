@@ -1,16 +1,18 @@
 import { Context, Service } from '@deepseek-ai/cordis'
+import { z as zod } from 'zod'
+import type { ZodType } from 'zod'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-commands'
+import type {} from '@deepseek-ai/dsh-session-projection'
 // Pull the existing `ctx.planMode` Context merge without duplicating it here.
 import type {} from './index.ts'
+import type { YanamiBaseMode, YanamiMode, YanamiModeProjection } from './types.ts'
+export type { YanamiBaseMode, YanamiMode, YanamiModeProjection } from './types.ts'
 
 /** Non-plan modes owned by Yanami Workbench. Plan remains owned by dsh-plan-mode. */
-export const YANAMI_BASE_MODES = ['do', 'spec', 'review', 'ship'] as const
-export type YanamiBaseMode = (typeof YANAMI_BASE_MODES)[number]
-export type YanamiMode = YanamiBaseMode | 'plan'
-
+export const YANAMI_BASE_MODES = ['do', 'spec', 'review', 'ship'] as const satisfies readonly YanamiBaseMode[]
 const BASE_MODE_SET = new Set<string>(YANAMI_BASE_MODES)
 
 /** Stable operator policy shared by every Yanami mode, including Plan. */
@@ -85,6 +87,15 @@ export interface YanamiModeState {
   pending?: YanamiBaseMode
 }
 
+interface YanamiProjectionState {
+  base: YanamiBaseMode
+  plan: boolean
+}
+
+const yanamiProjectionSchema: ZodType<YanamiModeProjection> = zod.object({
+  mode: zod.enum(['do', 'spec', 'plan', 'review', 'ship']),
+})
+
 /**
  * Durable Yanami collaboration mode. `plan/mode` remains authoritative for
  * Plan and overlays (rather than replaces) the last Yanami base mode.
@@ -124,6 +135,28 @@ export class YanamiModeController extends Service {
         const state = this.get(agent)
         return YANAMI_MODE_PROMPTS[state.pending ?? state.mode]
       },
+    })
+
+    // Clients read the committed effective mode from the same durable session
+    // log as the model. Plan is folded as an overlay, so refresh/resume/fork do
+    // not need a browser-side mode mirror.
+    ctx.inject(['sessionProjections'], (projectionCtx) => {
+      projectionCtx.sessionProjections.register<'yanamiMode', YanamiProjectionState>({
+        key: 'yanamiMode',
+        schema: yanamiProjectionSchema,
+        init: () => ({ base: 'do', plan: false }),
+        apply: (state, event) => {
+          if (event.type === 'yanami/mode') {
+            return event.data.mode === state.base ? state : { ...state, base: event.data.mode }
+          }
+          if (event.type === 'plan/mode') {
+            return event.data.active === state.plan ? state : { ...state, plan: event.data.active }
+          }
+          return state
+        },
+        view: state => ({ mode: state.plan ? 'plan' : state.base }),
+        stateVersion: 1,
+      })
     })
 
     ctx.inject(['commands'], (commandCtx) => {
