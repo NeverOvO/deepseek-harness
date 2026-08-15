@@ -10,8 +10,8 @@ import { packager } from '@electron/packager'
 const execFileAsync = promisify(execFile)
 const ELECTRON_VERSION = '43.2.0'
 const NODE_VERSION = '24.19.0'
-const APP_NAME = '八奈见工作台'
-const EXECUTABLE_NAME = 'Yanami Workbench'
+const APP_NAME = '云屿来工作台'
+const EXECUTABLE_NAME = 'Yunyulai Workbench'
 const BUNDLE_ID = 'com.yunyulai.yanami-workbench'
 const READY_PATTERN = /dsh web:\s+(http:\/\/127\.0\.0\.1:\d+)/
 const RUNTIME_SMOKE_TIMEOUT_MS = 45_000
@@ -268,8 +268,8 @@ async function main() {
   const appPath = await findAppBundle(outputDir)
   await smokePackagedRuntime(appPath)
 
-  const zipPath = join(outDir, `Yanami-Workbench-macos-${arch}.zip`)
-  const dmgPath = join(outDir, `Yanami-Workbench-macos-${arch}.dmg`)
+  const zipPath = join(outDir, `Yunyulai-Workbench-macos-${arch}.zip`)
+  const dmgPath = join(outDir, `Yunyulai-Workbench-macos-${arch}.dmg`)
 
   console.log(`[desktop] creating ${zipPath}`)
   await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', appPath, zipPath])
