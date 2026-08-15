@@ -45,6 +45,9 @@
       "path": "../../runtime-diagnostics/invariants"
     },
     {
+      "path": "../../storage/storage-domain"
+    },
+    {
       "path": "../../workspace/workspace"
     }
   ]
