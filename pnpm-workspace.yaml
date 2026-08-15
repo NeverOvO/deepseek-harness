@@ -20,13 +20,6 @@ packages:
   # closure is what the exe bundles and what the Python runtime distributes.
   - python/sdk-runtime
 
-# Electron Forge's reviewed desktop-only dependency graph currently reaches
-# @electron/node-gyp through a git source. Keep pnpm's default exotic-subdep
-# block everywhere else; only the desktop workspace may resolve that graph.
-packageConfigs:
-  '@deepseek-ai/dsh-desktop':
-    blockExoticSubdeps: false
-
 # Vendored framework packages keep their upstream semver ranges, while local
 # builds must resolve those matching names to this workspace's pinned sources.
 linkWorkspacePackages: true
