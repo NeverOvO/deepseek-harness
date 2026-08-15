@@ -73,6 +73,12 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # Project Memory is a workspace-id keyed sidecar domain. It is deliberately
+    # a sibling host service rather than a Workspace Core schema extension, so
+    # no `.yanami` metadata is written into user repositories.
+    - id: project-memory
+      name: '@deepseek-ai/dsh-workspace/project-memory'
+
     - id: session-projection-cache
       name: '@deepseek-ai/dsh-session-projection-cache'
       config:
