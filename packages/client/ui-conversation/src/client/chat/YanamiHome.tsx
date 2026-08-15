@@ -1,17 +1,29 @@
+import type { KeyboardEvent } from 'react'
+import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import css from './YanamiHome.module.css'
 
 export interface YanamiHomeProps {
   cwd?: string
   sessionCount?: number
+  activeMode?: YanamiMode
+  switchingMode?: YanamiMode
+  modeError?: string
+  onModeSelect?: (mode: YanamiMode) => void
 }
 
 const MODES = [
-  { key: 'Do', title: '执行模式', note: '直接理解目标并推进实现', tone: 'blue' },
-  { key: 'Spec', title: '规格模式', note: '明确范围、边界与验收标准', tone: 'sky' },
-  { key: 'Plan', title: '计划模式', note: '拆解路径、依赖与风险', tone: 'mint' },
-  { key: 'Review', title: '复核模式', note: '检查缺陷、回归与遗漏', tone: 'teal' },
-  { key: 'Ship', title: '交付模式', note: '测试、构建与发布准备', tone: 'lemon' },
-] as const
+  { key: 'do', label: 'Do', title: '执行模式', note: '直接理解目标并推进实现', tone: 'blue' },
+  { key: 'spec', label: 'Spec', title: '规格模式', note: '明确范围、边界与验收标准', tone: 'sky' },
+  { key: 'plan', label: 'Plan', title: '计划模式', note: '拆解路径、依赖与风险', tone: 'mint' },
+  { key: 'review', label: 'Review', title: '复核模式', note: '检查缺陷、回归与遗漏', tone: 'teal' },
+  { key: 'ship', label: 'Ship', title: '交付模式', note: '测试、构建与发布准备', tone: 'lemon' },
+] as const satisfies readonly {
+  key: YanamiMode
+  label: string
+  title: string
+  note: string
+  tone: string
+}[]
 
 function projectName(cwd?: string): string {
   if (cwd === undefined || cwd.trim() === '') return '选择工作区后载入'
@@ -19,9 +31,23 @@ function projectName(cwd?: string): string {
   return segments.at(-1) ?? cwd
 }
 
+function modeLabel(mode?: YanamiMode): string {
+  if (mode === undefined) return '加载中'
+  return MODES.find(item => item.key === mode)?.label ?? mode
+}
+
 /** Blank-session landing surface for Yanami Workbench. */
-export function YanamiHome({ cwd, sessionCount }: YanamiHomeProps = {}) {
+export function YanamiHome({
+  cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect,
+}: YanamiHomeProps = {}) {
   const project = projectName(cwd)
+  const modeEnabled = onModeSelect !== undefined
+
+  const selectFromKeyboard = (event: KeyboardEvent<HTMLElement>, mode: YanamiMode): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    onModeSelect?.(mode)
+  }
 
   return (
     <section className={css.home} aria-label="八奈见工作台首页">
@@ -40,8 +66,8 @@ export function YanamiHome({ cwd, sessionCount }: YanamiHomeProps = {}) {
               <strong>{sessionCount ?? '自动整理'}</strong>
             </div>
             <div className={css.metaCard}>
-              <span>默认策略</span>
-              <strong>Do · 高自治</strong>
+              <span>当前策略</span>
+              <strong>{modeLabel(activeMode)} · 高自治</strong>
             </div>
           </div>
         </div>
@@ -61,19 +87,43 @@ export function YanamiHome({ cwd, sessionCount }: YanamiHomeProps = {}) {
             <span className={css.sectionKicker}>五大模式</span>
             <h2>按工作状态组织，而不是按“AI 人设”组织</h2>
           </div>
-          <span className={css.phaseTag}>行为层接入中</span>
+          <span className={css.phaseTag}>
+            {switchingMode !== undefined
+              ? `${modeLabel(switchingMode)} · 切换中`
+              : activeMode !== undefined
+                ? `${modeLabel(activeMode)} · 已启用`
+                : modeEnabled ? 'Mode · 同步中' : '选择工作区后启用'}
+          </span>
         </div>
         <div className={css.modeGrid}>
-          {MODES.map(mode => (
-            <article key={mode.key} className={css.modeCard} data-tone={mode.tone}>
-              <div className={css.modeIcon}>{mode.key.slice(0, 1)}</div>
-              <div>
-                <strong>{mode.key} <span>{mode.title}</span></strong>
-                <p>{mode.note}</p>
-              </div>
-            </article>
-          ))}
+          {MODES.map(mode => {
+            const active = activeMode === mode.key
+            const switching = switchingMode === mode.key
+            const disabled = !modeEnabled || switchingMode !== undefined
+            return (
+              <article
+                key={mode.key}
+                className={css.modeCard}
+                data-tone={mode.tone}
+                data-active={active ? 'true' : 'false'}
+                data-switching={switching ? 'true' : 'false'}
+                role="button"
+                tabIndex={disabled ? -1 : 0}
+                aria-pressed={active}
+                aria-disabled={disabled}
+                onClick={disabled ? undefined : () => { onModeSelect(mode.key) }}
+                onKeyDown={disabled ? undefined : event => { selectFromKeyboard(event, mode.key) }}
+              >
+                <div className={css.modeIcon}>{switching ? '…' : mode.label.slice(0, 1)}</div>
+                <div>
+                  <strong>{mode.label} <span>{mode.title}</span></strong>
+                  <p>{mode.note}</p>
+                </div>
+              </article>
+            )
+          })}
         </div>
+        {modeError !== undefined && <p className={css.modeError} role="status">{modeError}</p>}
       </section>
 
       <section className={css.lowerGrid}>
