@@ -1,32 +1,36 @@
 /**
- * Workspace plugin, browser half. Two registrations: WorkspaceBrowser fills
- * the sidebar shell's `sidebar.workspaces` hole (the whole browsing region),
- * and WorkspacePicker fills the conversation hero's picker hole
- * (`conversation.hero.workspace` — both hero forms). Both read real Host
- * Workspaces through the global useWorkspaces hook, and each declares its
- * own `single` directory-flow child hole for the composed picker package's
- * client half (see the contract module doc). Export discipline:
- * packages/client/AGENTS.md.
+ * Workspace plugin, browser half. Two primary registrations share this package:
+ * WorkspaceBrowser fills the sidebar shell's `sidebar.workspaces` hole (the
+ * whole browsing region), and WorkspacePicker fills the conversation hero's
+ * picker hole (`conversation.hero.workspace` — both hero forms). A third,
+ * additive session-header entry exposes Project Memory for the Workspace that
+ * owns the current Session. Data stays in Client Runtime/Host storage; this
+ * package owns only the Workbench presentation.
  */
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import { ProjectMemoryHeaderAction } from './project-memory/ProjectMemoryHeaderAction.tsx'
+import type { ProjectMemoryHeaderInjected } from './project-memory/slots.ts'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
   WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspacePickerInjected, WorkspacePickerProps,
 } from './contract/slots.ts'
+export type {
+  ProjectMemoryHeaderActionProps, ProjectMemoryHeaderInjected, ProjectMemoryWorkspace,
+} from './project-memory/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** The workspace browsing region and pick/create flow copy. */
+    /** The workspace browsing region, pick/create flow, and Project Memory copy. */
     workspace: WorkspaceKey
   }
 }
@@ -42,12 +46,12 @@ const NS = 'workspace'
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
  */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'projectMemories', 'locale']
 
 /**
- * Register the browser and picker once their slot declarations are on the
- * ledger. Inject factories return plain callbacks; data reads use the
- * framework's global hooks.
+ * Register the browser, picker, and Project Memory action once their slot
+ * declarations are on the ledger. Inject factories return plain callbacks;
+ * data reads use framework-bound observable hooks.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -105,6 +109,40 @@ export function apply(ctx: ClientContext): void {
     createWorkspace: input => ctx.workspaces.create(input),
     hooks: { directoryFlow: pickerFlowSource },
   })
+
+  // Each Session action gets one stable derived Workspace source. Returning
+  // the Workspace object already held by the list store keeps getSnapshot()
+  // referentially stable until the Host projection actually changes.
+  const projectWorkspaceSources = new Map<SessionId, ProjectMemoryHeaderInjected['hooks']['projectWorkspace']>()
+  const projectWorkspaceSource = (sessionId: SessionId): ProjectMemoryHeaderInjected['hooks']['projectWorkspace'] => {
+    let source = projectWorkspaceSources.get(sessionId)
+    if (source !== undefined) return source
+    source = {
+      getSnapshot: () => {
+        const workspace = ctx.workspaces.list.getSnapshot().items
+          .find(item => item.sessionIds.includes(sessionId))
+        return workspace === undefined ? null : workspace
+      },
+      subscribe: listener => ctx.workspaces.list.subscribe(listener),
+    }
+    projectWorkspaceSources.set(sessionId, source)
+    return source
+  }
+
+  // Additive Project Memory entry beside the session title. Ungrouped sessions
+  // resolve a null Workspace and render no control; moving a Session between
+  // Workspace accounts updates the hook without remounting the session header.
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'project-memory',
+    order: 30,
+    locale: NS,
+    inject: (sessionId: SessionId): ProjectMemoryHeaderInjected => ({
+      hooks: { projectWorkspace: projectWorkspaceSource(sessionId) },
+      controllerFor: workspaceId => ctx.projectMemories.forWorkspace(workspaceId),
+    }),
+  }, ProjectMemoryHeaderAction))
+
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
