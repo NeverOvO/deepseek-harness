@@ -34,6 +34,11 @@ function forwardedEventContracts(ctx: Context): void {
   ctx.remote.$on('agent-preset/selected', (sessionId, agentPreset) => {
     void sessionId; void agentPreset
   })
+  ctx.remote.$on('project-memory/candidates-changed', (workspaceId) => {
+    // @ts-expect-error -- WorkspaceId remains branded across the forwarded-event face
+    const bare: typeof workspaceId = 'plain-string'
+    void bare; void workspaceId
+  })
   // @ts-expect-error -- client-local event outside the allowlist
   ctx.remote.$on('slots/changed', () => {})
   // @ts-expect-error -- declared host event the allowlist does not select
@@ -54,8 +59,10 @@ async function mount(): Promise<Bench> {
   const api = new FakeApiClient()
   const bench: Bench = { ctx, sinks: undefined, dispatched: [] }
   // Stands in for api-gateway's Remote service: this spec owns the carrier's
-  // handoff, not the fan-out behind it.
+  // handoff, not the fan-out behind it. `$on` is still part of the production
+  // contract because Runtime installs a resident Project Memory subscriber.
   ctx.reflect.provide('remote', {
+    $on: () => () => {},
     $dispatch: (event: string, args: readonly unknown[]) => { bench.dispatched.push([event, ...args]) },
   })
   const handle: ConnectionHandle = {
