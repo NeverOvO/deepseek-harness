@@ -1,4 +1,4 @@
-/** Session-header Project Memory trigger and six-section editor. */
+/** Session-header Project Memory trigger, editor, and candidate review queue. */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -32,6 +32,13 @@ function sameSections(left: ProjectMemorySections, right: ProjectMemorySections)
   return SECTION_ROWS.every(({ key }) => left[key] === right[key])
 }
 
+function candidateSourceLabel(source: string): WorkspaceKey {
+  if (source === 'session') return 'memory.candidates.source.session'
+  if (source === 'mission') return 'memory.candidates.source.mission'
+  if (source === 'automatic') return 'memory.candidates.source.automatic'
+  return 'memory.candidates.source.manual'
+}
+
 /** Editor body separated from the trigger so controller hooks never become conditional. */
 function ProjectMemoryEditor({
   controller,
@@ -45,10 +52,18 @@ function ProjectMemoryEditor({
   t: ProjectMemoryHeaderActionProps['t']
 }) {
   const live = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
+  const review = useSyncExternalStore(
+    controller.subscribeCandidates,
+    controller.getCandidateSnapshot,
+    controller.getCandidateSnapshot,
+  )
   const committed = live.memory?.sections ?? EMPTY_SECTIONS
   const [draft, setDraft] = useState<ProjectMemorySections>(committed)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [candidateSection, setCandidateSection] = useState<SectionKey>('decisions')
+  const [candidateText, setCandidateText] = useState('')
+  const [candidateBusy, setCandidateBusy] = useState<string | null>(null)
 
   useEffect(() => {
     if (live.state !== 'ready') return
@@ -57,11 +72,12 @@ function ProjectMemoryEditor({
 
   useEffect(() => {
     void controller.ensure()
+    void controller.ensureCandidates()
   }, [controller])
 
   const dirty = useMemo(() => !sameSections(draft, committed), [draft, committed])
   const close = (): void => {
-    if (!saving) onClose()
+    if (!saving && candidateBusy === null) onClose()
   }
   const save = (): void => {
     if (saving || live.state !== 'ready' || !dirty) return
@@ -76,6 +92,32 @@ function ProjectMemoryEditor({
       onClose()
     })
   }
+  const stageCandidate = (): void => {
+    const text = candidateText.trim()
+    if (text === '' || candidateBusy !== null) return
+    setCandidateBusy('new')
+    setActionError(null)
+    void controller.proposeCandidate(candidateSection, text).then((result) => {
+      setCandidateBusy(null)
+      if (!result.ok) {
+        setActionError(result.message)
+        return
+      }
+      setCandidateText('')
+    })
+  }
+  const reviewCandidate = (candidateId: string, accept: boolean): void => {
+    if (candidateBusy !== null || (accept && dirty)) return
+    setCandidateBusy(candidateId)
+    setActionError(null)
+    const operation = accept
+      ? controller.acceptCandidate(candidateId)
+      : controller.rejectCandidate(candidateId)
+    void operation.then((result) => {
+      setCandidateBusy(null)
+      if (!result.ok) setActionError(result.message)
+    })
+  }
 
   return (
     <Modal
@@ -86,10 +128,12 @@ function ProjectMemoryEditor({
       description={t('memory.description')}
       footer={(
         <>
-          <Button variant="outline" disabled={saving} onClick={close}>{t('cancel')}</Button>
+          <Button variant="outline" disabled={saving || candidateBusy !== null} onClick={close}>
+            {t('cancel')}
+          </Button>
           <Button
             variant="primary"
-            disabled={saving || live.state !== 'ready' || !dirty}
+            disabled={saving || candidateBusy !== null || live.state !== 'ready' || !dirty}
             onClick={save}
           >
             {t('memory.save')}
@@ -111,22 +155,111 @@ function ProjectMemoryEditor({
         </div>
       ) : (
         <div className={css.editor}>
-          {SECTION_ROWS.map(({ key, label }) => (
-            <label className={css.section} key={key}>
-              <span className={css.label}>{t(label)}</span>
+          <div className={css.sections}>
+            {SECTION_ROWS.map(({ key, label }) => (
+              <label className={css.section} key={key}>
+                <span className={css.label}>{t(label)}</span>
+                <textarea
+                  className={css.textarea}
+                  value={draft[key]}
+                  disabled={saving}
+                  placeholder={t('memory.section.placeholder')}
+                  onChange={(event) => {
+                    const text = event.target.value
+                    setDraft(current => ({ ...current, [key]: text }))
+                    setActionError(null)
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+
+          <section className={css.candidates} aria-label={t('memory.candidates.title')}>
+            <div className={css.candidateHeading}>
+              <div>
+                <div className={css.label}>{t('memory.candidates.title')}</div>
+                <div className={css.help}>{t('memory.candidates.description')}</div>
+              </div>
+            </div>
+
+            <div className={css.candidateComposer}>
+              <select
+                className={css.select}
+                value={candidateSection}
+                disabled={candidateBusy !== null}
+                aria-label={t(SECTION_ROWS.find(row => row.key === candidateSection)?.label ?? 'memory.section.decisions')}
+                onChange={(event) => { setCandidateSection(event.target.value as SectionKey) }}
+              >
+                {SECTION_ROWS.map(({ key, label }) => (
+                  <option key={key} value={key}>{t(label)}</option>
+                ))}
+              </select>
               <textarea
-                className={css.textarea}
-                value={draft[key]}
-                disabled={saving}
-                placeholder={t('memory.section.placeholder')}
-                onChange={(event) => {
-                  const text = event.target.value
-                  setDraft(current => ({ ...current, [key]: text }))
-                  setActionError(null)
-                }}
+                className={css.candidateTextarea}
+                value={candidateText}
+                disabled={candidateBusy !== null}
+                placeholder={t('memory.candidates.placeholder')}
+                onChange={(event) => { setCandidateText(event.target.value); setActionError(null) }}
               />
-            </label>
-          ))}
+              <Button
+                variant="outline"
+                disabled={candidateBusy !== null || candidateText.trim() === ''}
+                onClick={stageCandidate}
+              >
+                {t('memory.candidates.add')}
+              </Button>
+            </div>
+
+            {review.state === 'loading' || review.state === 'cold' ? (
+              <div className={css.status} role="status">{t('memory.candidates.loading')}</div>
+            ) : review.state === 'error' ? (
+              <div>
+                <div className={css.error} role="alert">{review.error ?? t('memory.error')}</div>
+                <Button variant="outline" onClick={() => { void controller.refreshCandidates() }}>
+                  {t('memory.retry')}
+                </Button>
+              </div>
+            ) : review.candidates.length === 0 ? (
+              <div className={css.status}>{t('memory.candidates.empty')}</div>
+            ) : (
+              <div className={css.candidateList}>
+                {review.candidates.map(candidate => {
+                  const row = SECTION_ROWS.find(item => item.key === candidate.section)
+                  const busy = candidateBusy === candidate.id
+                  return (
+                    <article className={css.candidateCard} key={candidate.id}>
+                      <div className={css.candidateMeta}>
+                        <span>{t(row?.label ?? 'memory.section.decisions')}</span>
+                        <span>·</span>
+                        <span>{t(candidateSourceLabel(candidate.source))}</span>
+                      </div>
+                      <div className={css.candidateText}>{candidate.text}</div>
+                      <div className={css.candidateActions}>
+                        <Button
+                          variant="outline"
+                          disabled={candidateBusy !== null}
+                          onClick={() => { reviewCandidate(candidate.id, false) }}
+                        >
+                          {t('memory.candidates.reject')}
+                        </Button>
+                        <Button
+                          variant="primary"
+                          disabled={candidateBusy !== null || dirty}
+                          onClick={() => { reviewCandidate(candidate.id, true) }}
+                        >
+                          {t('memory.candidates.accept')}
+                        </Button>
+                      </div>
+                      {dirty && !busy && (
+                        <div className={css.help}>{t('memory.candidates.saveFirst')}</div>
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+
           {actionError !== null && <div className={css.error} role="alert">{actionError}</div>}
         </div>
       )}
