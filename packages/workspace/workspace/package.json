@@ -30,10 +30,6 @@
       "types": "./lib/types/project-memory-types.d.ts",
       "default": "./lib/types/project-memory-types.js"
     },
-    "./project-memory-remote": {
-      "types": "./lib/types/project-memory-remote.d.ts",
-      "default": "./lib/types/project-memory-remote.js"
-    },
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
