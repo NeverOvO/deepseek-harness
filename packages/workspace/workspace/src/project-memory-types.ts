@@ -42,6 +42,20 @@ export interface ProjectMemoryView {
   readonly updatedAt: string
 }
 
+/** Origin of a candidate before it is accepted into durable Project Memory. */
+export type ProjectMemoryCandidateSource = 'manual' | 'session' | 'mission' | 'automatic'
+
+/** One pending candidate waiting for human review. */
+export interface ProjectMemoryCandidateView {
+  readonly id: string
+  readonly workspaceId: ProjectMemoryWorkspaceId
+  readonly section: ProjectMemorySection
+  readonly text: string
+  readonly source: ProjectMemoryCandidateSource
+  readonly sourceRef: string | null
+  readonly createdAt: string
+}
+
 /** Read the Project Memory associated with one stable Workspace identity. */
 export interface ProjectMemoryGetRequest {
   readonly workspaceId: ProjectMemoryWorkspaceId
@@ -65,9 +79,35 @@ export interface ProjectMemoryClearRequest {
   readonly workspaceId: ProjectMemoryWorkspaceId
 }
 
+/** Read pending candidate memory for one Workspace. */
+export interface ProjectMemoryCandidatesRequest {
+  readonly workspaceId: ProjectMemoryWorkspaceId
+}
+
+/** Stage one candidate for later human review. */
+export interface ProjectMemoryProposeCandidateRequest {
+  readonly workspaceId: ProjectMemoryWorkspaceId
+  readonly section: ProjectMemorySection
+  readonly text: string
+  readonly source: ProjectMemoryCandidateSource
+  readonly sourceRef: string | null
+}
+
+/** Accept or reject one candidate belonging to a Workspace. */
+export interface ProjectMemoryReviewCandidateRequest {
+  readonly workspaceId: ProjectMemoryWorkspaceId
+  readonly candidateId: string
+}
+
 /** Current memory; `null` means the Workspace is known but no row exists. */
 export interface ProjectMemoryReadValue {
   readonly memory: ProjectMemoryView | null
+}
+
+/** Current pending candidate queue for one Workspace. */
+export interface ProjectMemoryCandidateQueueValue {
+  readonly memory: ProjectMemoryView | null
+  readonly candidates: readonly ProjectMemoryCandidateView[]
 }
 
 /** Clear acknowledgement; false means the Workspace had no durable memory row. */
@@ -81,16 +121,29 @@ export interface ProjectMemoryWorkspaceNotFound {
   readonly workspaceId: ProjectMemoryWorkspaceId
 }
 
+/** A candidate id is absent or belongs to a different Workspace. */
+export interface ProjectMemoryCandidateNotFound {
+  readonly code: 'candidate-not-found'
+  readonly workspaceId: ProjectMemoryWorkspaceId
+  readonly candidateId: string
+}
+
 /** Successful Project Memory Remote operation. */
 export interface ProjectMemorySuccess<T> {
   readonly ok: true
   readonly value: T
 }
 
-/** Rejected Project Memory Remote operation. */
+/** Rejected core Project Memory operation. */
 export interface ProjectMemoryRejected {
   readonly ok: false
   readonly error: ProjectMemoryWorkspaceNotFound
+}
+
+/** Rejected candidate review operation. */
+export interface ProjectMemoryCandidateRejected {
+  readonly ok: false
+  readonly error: ProjectMemoryWorkspaceNotFound | ProjectMemoryCandidateNotFound
 }
 
 /** Result returned by Project Memory get/setSection/replace. */
@@ -102,3 +155,8 @@ export type ProjectMemoryReadResult =
 export type ProjectMemoryClearResult =
   | ProjectMemorySuccess<ProjectMemoryClearValue>
   | ProjectMemoryRejected
+
+/** Result returned by candidate list/propose/accept/reject. */
+export type ProjectMemoryCandidateQueueResult =
+  | ProjectMemorySuccess<ProjectMemoryCandidateQueueValue>
+  | ProjectMemoryCandidateRejected
