@@ -81,6 +81,8 @@ export function HeroGlow({ className }: { className?: string | undefined }) {
 export interface HeroShellProps {
   t: HeroTranslate
   children?: ReactNode
+  cwd?: string
+  sessionCount?: number
 }
 
 /**
@@ -88,10 +90,10 @@ export interface HeroShellProps {
  * the real composer immediately below this surface, so the dashboard is
  * presentation rather than a second workflow implementation.
  */
-export function HeroShell({ children }: HeroShellProps) {
+export function HeroShell({ children, cwd, sessionCount }: HeroShellProps) {
   return (
     <div className={css.root}>
-      <YanamiHome />
+      <YanamiHome cwd={cwd} sessionCount={sessionCount} />
       {children}
     </div>
   )
