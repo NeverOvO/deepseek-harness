@@ -3,7 +3,8 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-commands'
-import type { PlanModeController } from './index.ts'
+// Pull the existing `ctx.planMode` Context merge without duplicating it here.
+import type {} from './index.ts'
 
 /** Non-plan modes owned by Yanami Workbench. Plan remains owned by dsh-plan-mode. */
 export const YANAMI_BASE_MODES = ['do', 'spec', 'review', 'ship'] as const
@@ -51,7 +52,6 @@ declare module '@deepseek-ai/dsh-session/types' {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     yanamiMode: YanamiModeController
-    planMode: PlanModeController
   }
 }
 
@@ -90,7 +90,7 @@ export interface YanamiModeState {
  * Plan and overlays (rather than replaces) the last Yanami base mode.
  */
 export class YanamiModeController extends Service {
-  static inject = ['systemPrompt']
+  static inject = ['systemPrompt', 'planMode']
 
   private readonly pendingIntents = new WeakMap<Session, YanamiBaseMode>()
 
@@ -137,11 +137,7 @@ export class YanamiModeController extends Service {
             return { kind: 'success', text: `Yanami mode: ${this.effective(ctx, agent)}.` }
           }
           if (requested === 'plan') {
-            const planMode = ctx.get('planMode')
-            if (planMode === undefined) {
-              return { kind: 'error', text: 'Plan mode is unavailable in this agent preset.' }
-            }
-            const outcome = planMode.set(agent, true)
+            const outcome = ctx.planMode.set(agent, true)
             return {
               kind: 'success',
               text: outcome === 'committed'
@@ -154,7 +150,7 @@ export class YanamiModeController extends Service {
           }
 
           // Plan is an overlay. Leaving it reveals the selected base mode.
-          ctx.get('planMode')?.set(agent, false)
+          ctx.planMode.set(agent, false)
           const outcome = this.set(agent, requested)
           return {
             kind: 'success',
@@ -208,8 +204,8 @@ export class YanamiModeController extends Service {
   }
 
   private planTarget(ctx: Context, agent: Agent): boolean {
-    const state = ctx.get('planMode')?.get(agent)
-    return state?.pending ?? state?.active ?? false
+    const state = ctx.planMode.get(agent)
+    return state.pending ?? state.active
   }
 
   private onBoundary(session: Session): void {
