@@ -62,8 +62,11 @@ function props(
   workspace: ProjectMemoryWorkspace | null,
   controller: ProjectMemoryController,
 ): ProjectMemoryHeaderActionProps {
+  const useProjectWorkspace = <Selected,>(
+    selector: (state: ProjectMemoryWorkspace | null) => Selected,
+  ): Selected => selector(workspace)
   return {
-    useProjectWorkspace: selector => selector(workspace),
+    useProjectWorkspace,
     controllerFor: () => controller,
     t,
   } as unknown as ProjectMemoryHeaderActionProps
