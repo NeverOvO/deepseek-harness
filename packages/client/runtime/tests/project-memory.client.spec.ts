@@ -9,6 +9,15 @@ const WORKSPACE = 'workspace-1' as WorkspaceId
 
 function fakeRemote() {
   let architecture = ''
+  let candidates: Array<{
+    id: string
+    workspaceId: WorkspaceId
+    section: 'architecture'
+    text: string
+    source: 'manual'
+    sourceRef: null
+    createdAt: string
+  }> = []
   const calls: string[] = []
   const memory = () => architecture === '' ? null : {
     workspaceId: WORKSPACE,
@@ -23,6 +32,7 @@ function fakeRemote() {
     createdAt: '2026-08-15T00:00:00.000Z',
     updatedAt: '2026-08-15T00:00:00.000Z',
   }
+  const queue = () => ({ memory: memory(), candidates: [...candidates] })
   const remote = {
     get: async () => {
       calls.push('get')
@@ -41,6 +51,34 @@ function fakeRemote() {
       calls.push('clear')
       architecture = ''
       return { ok: true, value: { ok: true, value: { cleared: true } } }
+    },
+    listCandidates: async () => {
+      calls.push('listCandidates')
+      return { ok: true, value: { ok: true, value: queue() } }
+    },
+    proposeCandidate: async (request: { text: string }) => {
+      calls.push('proposeCandidate')
+      candidates = [{
+        id: 'candidate-1',
+        workspaceId: WORKSPACE,
+        section: 'architecture',
+        text: request.text,
+        source: 'manual',
+        sourceRef: null,
+        createdAt: '2026-08-15T00:00:01.000Z',
+      }]
+      return { ok: true, value: { ok: true, value: queue() } }
+    },
+    acceptCandidate: async () => {
+      calls.push('acceptCandidate')
+      architecture = candidates[0]?.text ?? architecture
+      candidates = []
+      return { ok: true, value: { ok: true, value: queue() } }
+    },
+    rejectCandidate: async () => {
+      calls.push('rejectCandidate')
+      candidates = []
+      return { ok: true, value: { ok: true, value: queue() } }
     },
   } as unknown as ProjectMemoryRemote
   return { remote, calls }
@@ -68,15 +106,39 @@ describe('ProjectMemoryController', () => {
     expect(calls).toEqual(['get', 'setSection', 'clear'])
   })
 
-  it('invalidates on demand and repulls on the next ensure', async () => {
+  it('keeps candidate review separate until acceptance updates committed memory', async () => {
+    const { remote, calls } = fakeRemote()
+    const controller = new ProjectMemoryController(remote, WORKSPACE)
+
+    expect(controller.getCandidateSnapshot()).toEqual({ state: 'cold', candidates: [], error: null })
+    await expect(controller.proposeCandidate('architecture', 'Host -> Runtime -> UI')).resolves.toEqual({ ok: true })
+    expect(controller.getSnapshot()).toEqual({ state: 'ready', memory: null, error: null })
+    expect(controller.getCandidateSnapshot()).toMatchObject({
+      state: 'ready',
+      candidates: [{ id: 'candidate-1', text: 'Host -> Runtime -> UI' }],
+    })
+
+    await expect(controller.acceptCandidate('candidate-1')).resolves.toEqual({ ok: true })
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'ready',
+      memory: { sections: { architecture: 'Host -> Runtime -> UI' } },
+    })
+    expect(controller.getCandidateSnapshot()).toEqual({ state: 'ready', candidates: [], error: null })
+    expect(calls).toEqual(['listCandidates', 'proposeCandidate', 'acceptCandidate'])
+  })
+
+  it('invalidates committed and candidate caches on demand', async () => {
     const { remote, calls } = fakeRemote()
     const controller = new ProjectMemoryController(remote, WORKSPACE)
     await controller.ensure()
+    await controller.ensureCandidates()
 
     controller.invalidate()
     expect(controller.getSnapshot().state).toBe('cold')
+    expect(controller.getCandidateSnapshot().state).toBe('cold')
     await controller.ensure()
-    expect(calls).toEqual(['get', 'get'])
+    await controller.ensureCandidates()
+    expect(calls).toEqual(['get', 'listCandidates', 'get', 'listCandidates'])
   })
 
   it('publishes stable business failures without throwing', async () => {
