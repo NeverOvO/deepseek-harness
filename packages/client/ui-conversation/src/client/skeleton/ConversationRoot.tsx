@@ -5,16 +5,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { HeroGlow, HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
 import css from './ConversationRoot.module.css'
 
-/** Full props composed from the slot contract. */
-export type ConversationRootProps = ConversationSlotProps
+interface YanamiRootInjected {
+  switchYanamiMode?: (mode: YanamiMode) => Promise<boolean>
+}
+
+/** Full props composed from the slot contract plus the Workbench extension. */
+export type ConversationRootProps = ConversationSlotProps & YanamiRootInjected
 
 export function ConversationRoot({
-  sessionId, useSession, useSessions, useWorkspaces, useInput, useComposerBlock,
-  renderSlot, renderSlotChain, selectWorkspace, t,
+  sessionId, useSession, useSessions, useWorkspaces, useProjection, useInput, useComposerBlock,
+  renderSlot, renderSlotChain, selectWorkspace, switchYanamiMode, t,
 }: ConversationRootProps) {
   const openState = useSession(s => s.openState)
   const composerPhase = useSession(s => s.composerPhase)
@@ -25,13 +30,29 @@ export function ConversationRoot({
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
   const sessionCount = useSessions(s => Object.keys(s.byId).length)
   const workspaces = useWorkspaces(s => s)
+  const yanamiMode = useProjection('yanamiMode')
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
+  const [switchingMode, setSwitchingMode] = useState<YanamiMode | undefined>()
+  const [modeError, setModeError] = useState<string | undefined>()
   const pickerAnchor = useRef<HTMLButtonElement>(null)
+
+  const chooseMode = useCallback((mode: YanamiMode): void => {
+    if (switchYanamiMode === undefined || switchingMode !== undefined || yanamiMode?.mode === mode) return
+    setSwitchingMode(mode)
+    setModeError(undefined)
+    void switchYanamiMode(mode).then((matched) => {
+      if (!matched) setModeError('当前会话未加载八奈见 Mode 能力，请重新启动工作台后再试。')
+    }, (error: unknown) => {
+      setModeError(error instanceof Error ? error.message : String(error))
+    }).finally(() => {
+      setSwitchingMode(undefined)
+    })
+  }, [switchYanamiMode, switchingMode, yanamiMode?.mode])
 
   // Publishes the seat's live height as --dsh-composer-height on the scroll
   // body so floating controls (ChatView back-to-bottom) clear the composer as
@@ -160,7 +181,17 @@ export function ConversationRoot({
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
       {hero && <HeroGlow className={css.heroGlow} />}
-      {hero && <HeroShell t={t} cwd={cwd} sessionCount={sessionCount} />}
+      {hero && (
+        <HeroShell
+          t={t}
+          cwd={cwd}
+          sessionCount={sessionCount}
+          activeMode={yanamiMode?.mode}
+          switchingMode={switchingMode}
+          modeError={modeError}
+          onModeSelect={switchYanamiMode === undefined ? undefined : chooseMode}
+        />
+      )}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {inputBar}
