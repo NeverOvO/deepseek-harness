@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-workspace/project-memory
  */
 
+import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { DomainChanged, KvTable } from '@deepseek-ai/dsh-storage-domain'
@@ -13,13 +14,22 @@ import { z } from 'zod'
 import type { WorkspaceId } from './types.ts'
 import type { WorkspaceRegistry } from './index.ts'
 import type {
+  ProjectMemoryCandidateNotFound,
+  ProjectMemoryCandidateQueueResult,
+  ProjectMemoryCandidateQueueValue,
+  ProjectMemoryCandidateRejected,
+  ProjectMemoryCandidateSource,
+  ProjectMemoryCandidateView,
+  ProjectMemoryCandidatesRequest,
   ProjectMemoryClearRequest,
   ProjectMemoryClearResult,
   ProjectMemoryGetRequest,
+  ProjectMemoryProposeCandidateRequest,
   ProjectMemoryReadResult,
   ProjectMemoryReadValue,
   ProjectMemoryRejected,
   ProjectMemoryReplaceRequest,
+  ProjectMemoryReviewCandidateRequest,
   ProjectMemorySetSectionRequest,
   ProjectMemorySuccess,
   ProjectMemoryView,
@@ -70,14 +80,29 @@ export interface ProjectMemory extends ProjectMemoryRecord {
   readonly workspaceId: WorkspaceId
 }
 
+/** Durable pending-candidate record kept outside the committed memory domain. */
+interface ProjectMemoryCandidateRecord {
+  readonly workspaceId: string
+  readonly section: ProjectMemorySection
+  readonly text: string
+  readonly source: ProjectMemoryCandidateSource
+  readonly sourceRef: string | null
+  readonly createdAt: string
+}
+
 /** A write addressed a workspace that is not registered in Workspace Core. */
 export class ProjectMemoryUnknownWorkspaceError extends Error {
-  /**
-   * @param workspaceId - Unknown stable workspace id.
-   */
   constructor(readonly workspaceId: WorkspaceId) {
     super(`cannot write Project Memory for unknown workspace '${workspaceId}'`)
     this.name = 'ProjectMemoryUnknownWorkspaceError'
+  }
+}
+
+/** A review action addressed a candidate absent from the requested Workspace. */
+class ProjectMemoryUnknownCandidateError extends Error {
+  constructor(readonly workspaceId: WorkspaceId, readonly candidateId: string) {
+    super(`cannot review Project Memory candidate '${candidateId}' for workspace '${workspaceId}'`)
+    this.name = 'ProjectMemoryUnknownCandidateError'
   }
 }
 
@@ -97,6 +122,15 @@ export const projectMemoryRecordSchema = z.object({
   updatedAt: z.string(),
 })
 
+const projectMemoryCandidateRecordSchema: z.ZodType<ProjectMemoryCandidateRecord> = z.object({
+  workspaceId: z.string(),
+  section: z.enum(projectMemorySectionNames),
+  text: z.string(),
+  source: z.enum(['manual', 'session', 'mission', 'automatic']),
+  sourceRef: z.string().nullable(),
+  createdAt: z.string(),
+})
+
 /**
  * Project Memory uses a separate data domain rather than extending the
  * `workspace` domain. The WorkspaceId is the table key, so path changes never
@@ -107,6 +141,19 @@ export const projectMemoryDomainSpec = defineDomain({
   version: 1,
   tables: {
     memories: domainTable<WorkspaceId, ProjectMemoryRecord>(projectMemoryRecordSchema),
+  },
+})
+
+/**
+ * Pending candidates are intentionally isolated from committed memory. This
+ * keeps the already-shipped `project_memory` v1 layout stable and ensures an
+ * unreviewed suggestion can never enter model context merely by being queued.
+ */
+export const projectMemoryCandidateDomainSpec = defineDomain({
+  name: 'project_memory_candidates',
+  version: 1,
+  tables: {
+    candidates: domainTable<string, ProjectMemoryCandidateRecord>(projectMemoryCandidateRecordSchema),
   },
 })
 
@@ -148,12 +195,32 @@ function recordSnapshot(workspaceId: WorkspaceId, record: ProjectMemoryRecord): 
   })
 }
 
+function candidateSnapshot(id: string, record: ProjectMemoryCandidateRecord): ProjectMemoryCandidateView {
+  return Object.freeze({
+    id,
+    workspaceId: record.workspaceId as WorkspaceId,
+    section: record.section,
+    text: record.text,
+    source: record.source,
+    sourceRef: record.sourceRef,
+    createdAt: record.createdAt,
+  })
+}
+
 function hasContent(sections: ProjectMemorySections): boolean {
   return projectMemorySectionNames.some(section => sections[section].trim().length > 0)
 }
 
 function normalizeSectionText(text: string): string {
   return text.trim().length === 0 ? '' : text
+}
+
+function mergeCandidateText(current: string, candidate: string): string {
+  const normalizedCandidate = normalizeSectionText(candidate)
+  if (normalizedCandidate === '') return current
+  if (current.trim() === '') return normalizedCandidate
+  if (current.includes(normalizedCandidate)) return current
+  return `${current.trimEnd()}\n\n${normalizedCandidate}`
 }
 
 /** Freeze one host memory snapshot before it crosses the typed Remote boundary. */
@@ -188,11 +255,18 @@ function remoteWorkspaceMissing(workspaceId: WorkspaceId): ProjectMemoryRejected
   })
 }
 
+function remoteCandidateMissing(workspaceId: WorkspaceId, candidateId: string): ProjectMemoryCandidateRejected {
+  const error: ProjectMemoryCandidateNotFound = Object.freeze({
+    code: 'candidate-not-found',
+    workspaceId,
+    candidateId,
+  })
+  return Object.freeze({ ok: false, error })
+}
+
 /**
  * Render the model-facing Project Memory snapshot. Empty sections are omitted
  * to avoid wasting context tokens while the canonical section order remains stable.
- * @param memory - immutable workspace memory snapshot.
- * @returns durable context text, or an empty string when every section is empty.
  */
 export function renderProjectMemoryContext(memory: ProjectMemory): string {
   const sections = projectMemorySectionNames.flatMap((section) => {
@@ -216,35 +290,35 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * Host-side Project Memory storage service and typed Remote owner. It owns only
- * its sidecar domain; Workspace Core remains authoritative for workspace identity
- * and lifecycle. Remote methods are thin wrappers over the same durable methods,
- * so the browser never gains a second persistence path.
+ * Host-side Project Memory storage service and typed Remote owner. Committed
+ * memory and pending candidates occupy separate domains; only committed memory
+ * is ever rendered into model context.
  */
 export class ProjectMemoryService extends TypertRemoteService {
   static inject = ['storageDomain', 'workspaceRegistry']
 
   private table?: KvTable<WorkspaceId, ProjectMemoryRecord>
+  private candidateTable?: KvTable<string, ProjectMemoryCandidateRecord>
   private operationTail: Promise<void> = Promise.resolve()
   private mutationAdmissionOpen = true
 
-  /**
-   * @param ctx - Host context carrying storage-domain and Workspace Core.
-   */
   constructor(ctx: Context) {
     super(ctx, 'projectMemory')
   }
 
-  /** Open the independent Project Memory domain and bind workspace deletion cleanup. */
+  /** Open committed-memory and candidate-review domains and bind Workspace cleanup. */
   protected async [Service.init](): Promise<void> {
     const domain = await this.ctx.storageDomain.open(projectMemoryDomainSpec)
+    const candidateDomain = await this.ctx.storageDomain.open(projectMemoryCandidateDomainSpec)
     this.table = domain.table('memories')
+    this.candidateTable = candidateDomain.table('candidates')
 
     this.ctx.on('domain/changed', (change: DomainChanged) => {
       if (change.domain !== 'workspace'
         || change.table !== 'workspaces'
         || change.operation !== 'deleted') return
-      void this.clear(change.key as WorkspaceId).catch((error: unknown) => {
+      const workspaceId = change.key as WorkspaceId
+      void this.clearWorkspaceSidecars(workspaceId).catch((error: unknown) => {
         this.ctx.logger.warn(
           `Project Memory cleanup failed for deleted workspace '${change.key}': ${String(error)}`,
         )
@@ -254,76 +328,42 @@ export class ProjectMemoryService extends TypertRemoteService {
     this.ctx.effect(() => async () => {
       this.mutationAdmissionOpen = false
       await this.operationTail
+      await candidateDomain.close()
       await domain.close()
     }, 'project-memory.domainClose')
   }
 
-  /**
-   * Read one workspace's durable Project Memory synchronously from the domain cache.
-   * @param workspaceId - Stable workspace id.
-   * @returns an immutable snapshot, or `undefined` when no memory has been written.
-   */
+  /** Read one workspace's committed Project Memory synchronously from the domain cache. */
   get(workspaceId: WorkspaceId): ProjectMemory | undefined {
     const record = this.requireTable().get(workspaceId)
     return record === undefined ? undefined : recordSnapshot(workspaceId, record)
   }
 
-  /**
-   * Return an empty six-section value for UI/editor initialization without
-   * materializing a durable row.
-   * @returns a frozen empty section object.
-   */
+  /** Return an empty six-section value without materializing a durable row. */
   empty(): ProjectMemorySections {
     return EMPTY_SECTIONS
   }
 
-  /**
-   * Replace one section while preserving every other section atomically with
-   * respect to other Project Memory writes in this service.
-   * @param workspaceId - Stable workspace id.
-   * @param section - Canonical section to replace.
-   * @param text - New section text; whitespace-only input clears the section.
-   * @returns the committed snapshot, or `undefined` when clearing the final non-empty section deletes the row.
-   */
+  /** Pending candidates for one Workspace, oldest first. */
+  candidates(workspaceId: WorkspaceId): readonly ProjectMemoryCandidateView[] {
+    return Object.freeze(
+      [...this.requireCandidateTable().entries()]
+        .filter(([, record]) => record.workspaceId === workspaceId)
+        .map(([id, record]) => candidateSnapshot(id, record))
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    )
+  }
+
+  /** Replace one committed section while preserving the others. */
   setSection(
     workspaceId: WorkspaceId,
     section: ProjectMemorySection,
     text: string,
   ): Promise<ProjectMemory | undefined> {
-    return this.enqueue(async () => {
-      this.assertKnownWorkspace(workspaceId)
-      const table = this.requireTable()
-      const current = table.get(workspaceId)
-      const normalized = normalizeSectionText(text)
-      const currentSections = current?.sections ?? EMPTY_SECTIONS
-      if (currentSections[section] === normalized) {
-        return current === undefined ? undefined : recordSnapshot(workspaceId, current)
-      }
-
-      const sections = sectionsSnapshot({ ...currentSections, [section]: normalized })
-      if (!hasContent(sections)) {
-        if (current !== undefined) await table.delete(workspaceId)
-        return undefined
-      }
-
-      const now = new Date().toISOString()
-      const next: ProjectMemoryRecord = Object.freeze({
-        sections,
-        createdAt: current?.createdAt ?? now,
-        updatedAt: now,
-      })
-      await table.put(workspaceId, next)
-      return recordSnapshot(workspaceId, next)
-    })
+    return this.enqueue(async () => await this.setSectionNow(workspaceId, section, text))
   }
 
-  /**
-   * Replace all six sections in one durable write. Empty payloads remove the
-   * row instead of storing meaningless records.
-   * @param workspaceId - Stable workspace id.
-   * @param sections - Complete replacement payload.
-   * @returns the committed snapshot, or `undefined` when the payload is empty.
-   */
+  /** Replace all six committed sections in one durable write. */
   replace(
     workspaceId: WorkspaceId,
     sections: ProjectMemorySections,
@@ -360,14 +400,74 @@ export class ProjectMemoryService extends TypertRemoteService {
     })
   }
 
-  /**
-   * Remove one Project Memory record. This is intentionally idempotent and
-   * also accepts a just-deleted workspace id so lifecycle cleanup can run.
-   * @param workspaceId - Stable workspace id whose sidecar row should disappear.
-   * @returns whether a durable row existed.
-   */
+  /** Remove one committed Project Memory record without touching pending candidates. */
   clear(workspaceId: WorkspaceId): Promise<boolean> {
     return this.enqueue(async () => await this.requireTable().delete(workspaceId))
+  }
+
+  /** Stage one pending candidate, deduplicating exact pending text in the same section. */
+  proposeCandidate(
+    workspaceId: WorkspaceId,
+    section: ProjectMemorySection,
+    text: string,
+    source: ProjectMemoryCandidateSource,
+    sourceRef: string | null,
+  ): Promise<ProjectMemoryCandidateView> {
+    return this.enqueue(async () => {
+      this.assertKnownWorkspace(workspaceId)
+      const normalized = normalizeSectionText(text)
+      if (normalized === '') throw new Error('Project Memory candidate text must not be empty')
+      const table = this.requireCandidateTable()
+      for (const [id, record] of table.entries()) {
+        if (record.workspaceId === workspaceId
+          && record.section === section
+          && record.text === normalized) return candidateSnapshot(id, record)
+      }
+      const id = randomUUID()
+      const record: ProjectMemoryCandidateRecord = Object.freeze({
+        workspaceId,
+        section,
+        text: normalized,
+        source,
+        sourceRef,
+        createdAt: new Date().toISOString(),
+      })
+      await table.put(id, record)
+      return candidateSnapshot(id, record)
+    })
+  }
+
+  /** Accept a pending candidate into its canonical section, then remove it from review. */
+  acceptCandidate(workspaceId: WorkspaceId, candidateId: string): Promise<ProjectMemory | undefined> {
+    return this.enqueue(async () => {
+      this.assertKnownWorkspace(workspaceId)
+      const table = this.requireCandidateTable()
+      const candidate = table.get(candidateId)
+      if (candidate === undefined || candidate.workspaceId !== workspaceId) {
+        throw new ProjectMemoryUnknownCandidateError(workspaceId, candidateId)
+      }
+      const current = this.get(workspaceId)?.sections[candidate.section] ?? ''
+      const memory = await this.setSectionNow(
+        workspaceId,
+        candidate.section,
+        mergeCandidateText(current, candidate.text),
+      )
+      await table.delete(candidateId)
+      return memory
+    })
+  }
+
+  /** Reject one pending candidate without changing committed Project Memory. */
+  rejectCandidate(workspaceId: WorkspaceId, candidateId: string): Promise<void> {
+    return this.enqueue(async () => {
+      this.assertKnownWorkspace(workspaceId)
+      const table = this.requireCandidateTable()
+      const candidate = table.get(candidateId)
+      if (candidate === undefined || candidate.workspaceId !== workspaceId) {
+        throw new ProjectMemoryUnknownCandidateError(workspaceId, candidateId)
+      }
+      await table.delete(candidateId)
+    })
   }
 
   /** Read the sidecar through the generated `projectMemory.get` Remote method. */
@@ -389,9 +489,7 @@ export class ProjectMemoryService extends TypertRemoteService {
         request.text,
       )))
     } catch (error: unknown) {
-      if (error instanceof ProjectMemoryUnknownWorkspaceError) {
-        return remoteWorkspaceMissing(error.workspaceId)
-      }
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) return remoteWorkspaceMissing(error.workspaceId)
       throw error
     }
   }
@@ -402,20 +500,119 @@ export class ProjectMemoryService extends TypertRemoteService {
     try {
       return remoteSuccess(remoteReadValue(await this.replace(request.workspaceId, request.sections)))
     } catch (error: unknown) {
-      if (error instanceof ProjectMemoryUnknownWorkspaceError) {
-        return remoteWorkspaceMissing(error.workspaceId)
-      }
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) return remoteWorkspaceMissing(error.workspaceId)
       throw error
     }
   }
 
-  /** Clear the sidecar through `projectMemory.clear`, only for a registered Workspace. */
+  /** Clear the committed sidecar through `projectMemory.clear`. */
   @Remote('clear')
   async remoteClear(request: ProjectMemoryClearRequest): Promise<ProjectMemoryClearResult> {
     if (this.ctx.workspaceRegistry.get(request.workspaceId) === undefined) {
       return remoteWorkspaceMissing(request.workspaceId)
     }
     return remoteSuccess(Object.freeze({ cleared: await this.clear(request.workspaceId) }))
+  }
+
+  /** List candidates waiting for human review. */
+  @Remote('listCandidates')
+  async remoteListCandidates(request: ProjectMemoryCandidatesRequest): Promise<ProjectMemoryCandidateQueueResult> {
+    if (this.ctx.workspaceRegistry.get(request.workspaceId) === undefined) {
+      return remoteWorkspaceMissing(request.workspaceId)
+    }
+    return remoteSuccess(this.remoteCandidateQueue(request.workspaceId))
+  }
+
+  /** Stage a candidate without changing model-facing committed memory. */
+  @Remote('proposeCandidate')
+  async remoteProposeCandidate(
+    request: ProjectMemoryProposeCandidateRequest,
+  ): Promise<ProjectMemoryCandidateQueueResult> {
+    try {
+      await this.proposeCandidate(
+        request.workspaceId,
+        request.section,
+        request.text,
+        request.source,
+        request.sourceRef,
+      )
+      return remoteSuccess(this.remoteCandidateQueue(request.workspaceId))
+    } catch (error: unknown) {
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) return remoteWorkspaceMissing(error.workspaceId)
+      throw error
+    }
+  }
+
+  /** Accept one candidate and atomically order its merge ahead of later review mutations. */
+  @Remote('acceptCandidate')
+  async remoteAcceptCandidate(
+    request: ProjectMemoryReviewCandidateRequest,
+  ): Promise<ProjectMemoryCandidateQueueResult> {
+    try {
+      await this.acceptCandidate(request.workspaceId, request.candidateId)
+      return remoteSuccess(this.remoteCandidateQueue(request.workspaceId))
+    } catch (error: unknown) {
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) return remoteWorkspaceMissing(error.workspaceId)
+      if (error instanceof ProjectMemoryUnknownCandidateError) {
+        return remoteCandidateMissing(error.workspaceId, error.candidateId)
+      }
+      throw error
+    }
+  }
+
+  /** Reject one candidate without touching committed memory. */
+  @Remote('rejectCandidate')
+  async remoteRejectCandidate(
+    request: ProjectMemoryReviewCandidateRequest,
+  ): Promise<ProjectMemoryCandidateQueueResult> {
+    try {
+      await this.rejectCandidate(request.workspaceId, request.candidateId)
+      return remoteSuccess(this.remoteCandidateQueue(request.workspaceId))
+    } catch (error: unknown) {
+      if (error instanceof ProjectMemoryUnknownWorkspaceError) return remoteWorkspaceMissing(error.workspaceId)
+      if (error instanceof ProjectMemoryUnknownCandidateError) {
+        return remoteCandidateMissing(error.workspaceId, error.candidateId)
+      }
+      throw error
+    }
+  }
+
+  private remoteCandidateQueue(workspaceId: WorkspaceId): ProjectMemoryCandidateQueueValue {
+    const memory = this.get(workspaceId)
+    return Object.freeze({
+      memory: memory === undefined ? null : remoteSnapshot(memory),
+      candidates: this.candidates(workspaceId),
+    })
+  }
+
+  private async setSectionNow(
+    workspaceId: WorkspaceId,
+    section: ProjectMemorySection,
+    text: string,
+  ): Promise<ProjectMemory | undefined> {
+    this.assertKnownWorkspace(workspaceId)
+    const table = this.requireTable()
+    const current = table.get(workspaceId)
+    const normalized = normalizeSectionText(text)
+    const currentSections = current?.sections ?? EMPTY_SECTIONS
+    if (currentSections[section] === normalized) {
+      return current === undefined ? undefined : recordSnapshot(workspaceId, current)
+    }
+
+    const sections = sectionsSnapshot({ ...currentSections, [section]: normalized })
+    if (!hasContent(sections)) {
+      if (current !== undefined) await table.delete(workspaceId)
+      return undefined
+    }
+
+    const now = new Date().toISOString()
+    const next: ProjectMemoryRecord = Object.freeze({
+      sections,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+    })
+    await table.put(workspaceId, next)
+    return recordSnapshot(workspaceId, next)
   }
 
   private assertKnownWorkspace(workspaceId: WorkspaceId): void {
@@ -427,6 +624,21 @@ export class ProjectMemoryService extends TypertRemoteService {
   private requireTable(): KvTable<WorkspaceId, ProjectMemoryRecord> {
     if (this.table === undefined) throw new Error('Project Memory service is not started yet')
     return this.table
+  }
+
+  private requireCandidateTable(): KvTable<string, ProjectMemoryCandidateRecord> {
+    if (this.candidateTable === undefined) throw new Error('Project Memory candidate service is not started yet')
+    return this.candidateTable
+  }
+
+  private clearWorkspaceSidecars(workspaceId: WorkspaceId): Promise<void> {
+    return this.enqueue(async () => {
+      await this.requireTable().delete(workspaceId)
+      const candidateTable = this.requireCandidateTable()
+      for (const [id, record] of candidateTable.entries()) {
+        if (record.workspaceId === workspaceId) await candidateTable.delete(id)
+      }
+    })
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
