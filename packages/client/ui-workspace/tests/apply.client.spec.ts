@@ -70,22 +70,21 @@ async function bench() {
   }
 }
 
-type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace'
+type HoleName =
+  | 'sidebar.workspaces'
+  | 'conversation.hero.workspace'
+  | 'conversation.empty.workspace'
+  | 'conversation.session.header.actions'
 
-/** Declare any subset of the root holes with one root registration. */
+/** Declare any subset of the root-owned test holes with one root registration. */
 function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
-  const children = Object.fromEntries(names.map(name => [name, { kind: 'single', scope: 'root' }]))
+  const children = Object.fromEntries(names.map(name => [
+    name,
+    name === 'conversation.session.header.actions'
+      ? { kind: 'list', scope: 'session' }
+      : { kind: 'single', scope: 'root' },
+  ]))
   return slots.register({ name: 'root', children } as never, () => null)
-}
-
-/** Declare the additive per-session header action seat owned by ui-conversation. */
-function declareHeaderActions(slots: SlotRegistry): () => void {
-  return slots.register({
-    name: 'header-owner',
-    children: {
-      'conversation.session.header.actions': { kind: 'list', scope: 'session' },
-    },
-  } as never, () => null)
 }
 
 describe('ui-workspace apply', () => {
@@ -95,8 +94,7 @@ describe('ui-workspace apply', () => {
 
   it('registers browser, picker, and Project Memory action for declarations arriving before or after apply', async () => {
     const before = await bench()
-    declare(before.slots, 'sidebar.workspaces')
-    declareHeaderActions(before.slots)
+    declare(before.slots, 'sidebar.workspaces', 'conversation.session.header.actions')
     await before.ctx.plugin({ inject: [...inject], apply }).await()
     expect(before.slots.entries('sidebar.workspaces')[0]!.component).toBe(WorkspaceBrowser)
     expect(before.slots.entries('conversation.session.header.actions')[0]!.component).toBe(ProjectMemoryHeaderAction)
@@ -108,8 +106,12 @@ describe('ui-workspace apply', () => {
 
     const after = await bench()
     await after.ctx.plugin({ inject: [...inject], apply }).await()
-    declare(after.slots, 'conversation.hero.workspace', 'conversation.empty.workspace')
-    declareHeaderActions(after.slots)
+    declare(
+      after.slots,
+      'conversation.hero.workspace',
+      'conversation.empty.workspace',
+      'conversation.session.header.actions',
+    )
     await Promise.resolve()
     expect(after.slots.entries('conversation.hero.workspace')[0]!.component).toBe(WorkspacePicker)
     expect(after.slots.entries('conversation.session.header.actions')[0]!.component).toBe(ProjectMemoryHeaderAction)
@@ -158,11 +160,11 @@ describe('ui-workspace apply', () => {
 
   it('derives the Project Memory action from the Session Workspace account', async () => {
     const b = await bench()
-    declareHeaderActions(b.slots)
+    declare(b.slots, 'conversation.session.header.actions')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('conversation.session.header.actions')[0]!
-    const injectMemory = entry.inject as unknown as (sessionId: string) => ProjectMemoryHeaderInjected
-    const injected = injectMemory('session')
+    const injectProjectMemory = entry.inject as unknown as (sessionId: string) => ProjectMemoryHeaderInjected
+    const injected = injectProjectMemory('session')
 
     expect(injected.hooks.projectWorkspace.getSnapshot()).toMatchObject({
       workspaceId: 'ws',
@@ -171,7 +173,7 @@ describe('ui-workspace apply', () => {
     expect(injected.controllerFor('ws' as never)).toBe(b.controller)
     expect(b.controllerFor).toHaveBeenCalledWith('ws')
 
-    const ungrouped = injectMemory('ungrouped')
+    const ungrouped = injectProjectMemory('ungrouped')
     expect(ungrouped.hooks.projectWorkspace.getSnapshot()).toBeNull()
   })
 
@@ -215,8 +217,13 @@ describe('ui-workspace apply', () => {
 
   it('unregisters every entry on teardown', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'conversation.empty.workspace')
-    declareHeaderActions(b.slots)
+    declare(
+      b.slots,
+      'sidebar.workspaces',
+      'conversation.hero.workspace',
+      'conversation.empty.workspace',
+      'conversation.session.header.actions',
+    )
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     await fiber.dispose()
