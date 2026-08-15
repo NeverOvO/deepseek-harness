@@ -24,6 +24,12 @@
       "path": "../../boot/cmdline"
     },
     {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
       "path": "../../host/frontend-static"
     },
     {
