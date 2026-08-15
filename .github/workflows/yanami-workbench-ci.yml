@@ -10,6 +10,7 @@ on:
       - 'packages/client/ui-theme/**'
       - 'packages/plan/plan-mode/**'
       - 'packages/goal/**'
+      - 'packages/workspace/**'
       - 'pnpm-lock.yaml'
       - 'package.json'
       - 'pnpm-workspace.yaml'
