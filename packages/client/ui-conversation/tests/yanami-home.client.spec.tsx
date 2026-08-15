@@ -36,8 +36,8 @@ describe('YanamiHome Mission cockpit', () => {
 
     expect(view.getByText('准备开始')).toBeTruthy()
     expect(view.getByText(/创建 Goal 后/)).toBeTruthy()
-    expect(view.getByRole('progressbar', { name: 'Goal 执行轮次预算使用率' }))
-      .toHaveAttribute('aria-valuenow', '0')
+    expect(view.getByRole('progressbar', { name: 'Goal 执行轮次预算使用率' })
+      .getAttribute('aria-valuenow')).toBe('0')
   })
 
   it('renders an active goal and labels round consumption as budget usage', () => {
@@ -46,8 +46,8 @@ describe('YanamiHome Mission cockpit', () => {
     expect(view.getByText('进行中')).toBeTruthy()
     expect(view.getByText('完成八奈见工作台 Mission Cockpit')).toBeTruthy()
     expect(view.getByText('执行轮次 2 / 8 · 25% 预算已用')).toBeTruthy()
-    expect(view.getByRole('progressbar', { name: 'Goal 执行轮次预算使用率' }))
-      .toHaveAttribute('aria-valuenow', '25')
+    expect(view.getByRole('progressbar', { name: 'Goal 执行轮次预算使用率' })
+      .getAttribute('aria-valuenow')).toBe('25')
   })
 
   it('surfaces the durable block reason instead of hiding the blocker', () => {
@@ -76,7 +76,7 @@ describe('YanamiHome Mission cockpit', () => {
 
     expect(view.getByText('已完成')).toBeTruthy()
     expect(view.getByText('已完成 · 共启动 5 轮')).toBeTruthy()
-    expect(view.getByRole('progressbar', { name: '任务完成度' }))
-      .toHaveAttribute('aria-valuenow', '100')
+    expect(view.getByRole('progressbar', { name: '任务完成度' })
+      .getAttribute('aria-valuenow')).toBe('100')
   })
 })
