@@ -23,6 +23,7 @@ export function ConversationRoot({
   const inputState = useInput(s => s)
   const cwd = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.cwd)
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
+  const sessionCount = useSessions(s => Object.keys(s.byId).length)
   const workspaces = useWorkspaces(s => s)
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
@@ -159,7 +160,7 @@ export function ConversationRoot({
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
       {hero && <HeroGlow className={css.heroGlow} />}
-      {hero && <HeroShell t={t} />}
+      {hero && <HeroShell t={t} cwd={cwd} sessionCount={sessionCount} />}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {inputBar}
