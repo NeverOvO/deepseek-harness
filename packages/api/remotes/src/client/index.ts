@@ -6,6 +6,7 @@ import goalsRemote from '@deepseek-ai/dsh-goal/remote'
 import dynamicRemote from '@deepseek-ai/dsh-cordis-host-runner/remote'
 import pluginInventoryRemote from '@deepseek-ai/dsh-host-plugin-inventory/remote'
 import messageFeedbackRemote from '@deepseek-ai/dsh-message-feedback/remote'
+import projectMemoryRemote from '@deepseek-ai/dsh-workspace/remote'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 
 export type { TypertClientRemote as ClientRemote } from '@deepseek-ai/dsh-typert-protocol'
@@ -14,6 +15,7 @@ export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-goal/remote'
 export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'
 export type {} from '@deepseek-ai/dsh-message-feedback/remote'
+export type {} from '@deepseek-ai/dsh-workspace/remote'
 // The forwarded-event allowlist's selection seat: without it in the consumer's
 // compilation face `TypertRemoteEvent` is `never` and every `$on` call fails.
 export type { ApiRemoteForwardedEvent } from '../types.ts'
@@ -44,6 +46,26 @@ export type {
 } from '@deepseek-ai/dsh-client-connection/client'
 export type {} from '@deepseek-ai/dsh-api-gateway/client'
 export type {} from '@deepseek-ai/dsh-cordis-host-runner/remote'
+
+// Project Memory's browser-safe business vocabulary lives beside Workspace Core
+// but remains a separate sidecar contract. Re-export it through this assembly so
+// UI packages never import the host-only ProjectMemoryService implementation.
+export type {
+  ProjectMemoryClearRequest,
+  ProjectMemoryClearResult,
+  ProjectMemoryClearValue,
+  ProjectMemoryGetRequest,
+  ProjectMemoryReadResult,
+  ProjectMemoryReadValue,
+  ProjectMemoryRejected,
+  ProjectMemoryReplaceRequest,
+  ProjectMemorySection,
+  ProjectMemorySectionsView,
+  ProjectMemorySetSectionRequest,
+  ProjectMemorySuccess,
+  ProjectMemoryView,
+  ProjectMemoryWorkspaceNotFound,
+} from '@deepseek-ai/dsh-workspace/project-memory-types'
 
 // The payload vocabulary of the selected namespaces, re-exported so a Client
 // contribution can name what it sends and receives without importing a Host
@@ -107,6 +129,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
   try {
     for (const contribution of [
       commandsRemote, goalsRemote, dynamicRemote, pluginInventoryRemote, messageFeedbackRemote,
+      projectMemoryRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
     }
