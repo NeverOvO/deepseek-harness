@@ -100,6 +100,9 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
   })
 }
 
+/** Narrow test seams for the two safety decisions this module owns. */
+export const internals = Object.freeze({ workspaceForSession, proposalTool })
+
 /**
  * Register the proposal tool into each eligible Agent scope before its first
  * session-start/model request. Sessions outside registered Workspaces receive no
