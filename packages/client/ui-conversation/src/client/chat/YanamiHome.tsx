@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from 'react'
+import type { GoalProjection } from '@deepseek-ai/dsh-goal/client'
 import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import css from './YanamiHome.module.css'
 
@@ -9,6 +10,7 @@ export interface YanamiHomeProps {
   switchingMode?: YanamiMode
   modeError?: string
   onModeSelect?: (mode: YanamiMode) => void
+  mission?: GoalProjection | null
 }
 
 const MODES = [
@@ -36,12 +38,31 @@ function modeLabel(mode?: YanamiMode): string {
   return MODES.find(item => item.key === mode)?.label ?? mode
 }
 
+function missionProgress(mission?: GoalProjection | null): number {
+  if (mission === undefined || mission === null) return 0
+  if (mission.goal.phase === 'complete') return 100
+  if (mission.goal.maxGoalRounds <= 0) return 0
+  return Math.min(100, Math.round((mission.roundsStarted / mission.goal.maxGoalRounds) * 100))
+}
+
+function missionPhaseLabel(mission?: GoalProjection | null): string {
+  if (mission === undefined || mission === null) return '准备开始'
+  switch (mission.goal.phase) {
+    case 'active': return '进行中'
+    case 'paused': return '已暂停'
+    case 'blocked': return '已阻塞'
+    case 'complete': return '已完成'
+  }
+}
+
 /** Blank-session landing surface for Yanami Workbench. */
 export function YanamiHome({
-  cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect,
+  cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect, mission,
 }: YanamiHomeProps = {}) {
   const project = projectName(cwd)
   const modeEnabled = onModeSelect !== undefined
+  const missionPercent = missionProgress(mission)
+  const missionPhase = mission?.goal.phase ?? 'empty'
 
   const selectFromKeyboard = (event: KeyboardEvent<HTMLElement>, mode: YanamiMode): void => {
     if (event.key !== 'Enter' && event.key !== ' ') return
@@ -127,14 +148,41 @@ export function YanamiHome({
       </section>
 
       <section className={css.lowerGrid}>
-        <article className={css.panel}>
+        <article className={css.panel} data-mission-phase={missionPhase}>
           <div className={css.panelTitle}>
             <span className={css.panelIcon}>◎</span>
             <div><strong>任务驾驶舱</strong><small>Mission Cockpit</small></div>
+            <span className={css.missionStatus}>{missionPhaseLabel(mission)}</span>
           </div>
-          <div className={css.progressTrack}><span /></div>
-          <p>创建任务后，这里显示目标、阶段、阻塞点和验证进度。</p>
-          <div className={css.panelFoot}>目标 → 执行 → 验证 → 交付</div>
+          <div
+            className={css.progressTrack}
+            role="progressbar"
+            aria-label={mission?.goal.phase === 'complete' ? '任务完成度' : 'Goal 执行轮次预算使用率'}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={missionPercent}
+          >
+            <span style={{ width: `${missionPercent}%` }} />
+          </div>
+          {mission === undefined || mission === null
+            ? <p>创建 Goal 后，这里会实时显示目标、生命周期、阻塞原因与执行轮次。</p>
+            : (
+              <>
+                <p className={css.missionObjective} title={mission.goal.objective}>{mission.goal.objective}</p>
+                {mission.goal.phase === 'blocked' && mission.goal.blockedReason !== undefined && (
+                  <p className={css.missionReason} role="status">
+                    <strong>阻塞：</strong>{mission.goal.blockedReason.message}
+                  </p>
+                )}
+              </>
+            )}
+          <div className={css.panelFoot}>
+            {mission === undefined || mission === null
+              ? '目标 → 执行 → 验证 → 交付'
+              : mission.goal.phase === 'complete'
+                ? `已完成 · 共启动 ${mission.roundsStarted} 轮`
+                : `执行轮次 ${mission.roundsStarted} / ${mission.goal.maxGoalRounds} · ${missionPercent}% 预算已用`}
+          </div>
         </article>
 
         <article className={css.panel}>
