@@ -51,14 +51,23 @@ export type {} from '@deepseek-ai/dsh-cordis-host-runner/remote'
 // but remains a separate sidecar contract. Re-export it through this assembly so
 // UI packages never import the host-only ProjectMemoryService implementation.
 export type {
+  ProjectMemoryCandidateNotFound,
+  ProjectMemoryCandidateQueueResult,
+  ProjectMemoryCandidateQueueValue,
+  ProjectMemoryCandidateRejected,
+  ProjectMemoryCandidateSource,
+  ProjectMemoryCandidateView,
+  ProjectMemoryCandidatesRequest,
   ProjectMemoryClearRequest,
   ProjectMemoryClearResult,
   ProjectMemoryClearValue,
   ProjectMemoryGetRequest,
+  ProjectMemoryProposeCandidateRequest,
   ProjectMemoryReadResult,
   ProjectMemoryReadValue,
   ProjectMemoryRejected,
   ProjectMemoryReplaceRequest,
+  ProjectMemoryReviewCandidateRequest,
   ProjectMemorySection,
   ProjectMemorySectionsView,
   ProjectMemorySetSectionRequest,
