@@ -18,7 +18,6 @@
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  BrandWordmark, FishLogo,
   IconNewChatOutline16, IconPanelLeftOutline16,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -128,8 +127,8 @@ export function SidebarRoot({
       onPointerLeave={() => { armLinger() }}
     >
       <div className={css.logoRow}>
-        {/* Expanded, the wordmark doubles as a New Session shortcut; the
-            collapsed rail's logo is the expand toggle below instead. */}
+        {/* Expanded, the workbench brand doubles as a New Session shortcut;
+            the collapsed rail's monogram is the expand toggle below instead. */}
         {wide && (
           <button
             type="button"
@@ -137,11 +136,15 @@ export function SidebarRoot({
             aria-label={t('session.new.label')}
             onClick={() => { startSession() }}
           >
-            <BrandWordmark />
+            <span className={css.brandSpark} aria-hidden="true">✦</span>
+            <span className={css.brandCopy}>
+              <strong>八奈见工作台</strong>
+              <small>Yanami Workbench</small>
+            </span>
           </button>
         )}
-        {/* Rail resting state is the whale mark; hovering swaps in the panel
-            icon (the expand affordance, figma sidebar-hover flow). */}
+        {/* Rail resting state uses the Yanami monogram; hovering swaps in the
+            panel icon so the compact brand remains an obvious expand affordance. */}
         <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500}>
           <button
             type="button"
@@ -149,8 +152,8 @@ export function SidebarRoot({
             aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
             onClick={() => { toggleSidebar() }}
           >
-            {!wide && <FishLogo className={css.railFish} size={24} />}
-            {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
+            {!wide && <span className={css.railMonogram} aria-hidden="true">八</span>}
+            {/* Rail icons render at 18; expanded keeps the glyph-native size. */}
             <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
           </button>
         </Tooltip>
