@@ -207,6 +207,14 @@ export function apply(ctx: Context): void {
   const projectMemories = new ProjectMemoryRuntime(ctx, ctx.remote.projectMemory)
   ctx.effect(() => () => { projectMemories.dispose() }, 'runtime: Project Memory cache')
   ctx.effect(
+    () => ctx.remote.$on('project-memory/candidates-changed', (workspaceId) => {
+      // The event is an invalidation hint only; the Host remains authoritative.
+      // Refreshing also updates the session-header pending-count badge without polling.
+      void projectMemories.forWorkspace(workspaceId).refreshCandidates()
+    }),
+    'runtime: Project Memory candidate invalidation',
+  )
+  ctx.effect(
     () => workspaces.startInitialSelection(),
     'runtime: initial Workspace selection',
   )
