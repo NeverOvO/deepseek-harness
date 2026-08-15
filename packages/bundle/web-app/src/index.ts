@@ -22,6 +22,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import { renderProjectMemoryContext } from '@deepseek-ai/dsh-workspace/project-memory'
+import { installProjectMemoryProposalTool } from './project-memory-proposal.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'web-app'
@@ -171,8 +172,8 @@ export async function appendProjectMemoryContext(
 }
 
 /**
- * Mount the Web runtime: dist serving, surface prompt, the bash runtime
- * variable, and the URL line.
+ * Mount the Web runtime: dist serving, surface prompt, Project Memory proposal
+ * tooling, the bash runtime variable, and the URL line.
  * @param ctx - plugin context carrying the webServer service.
  * @param config - validated {@link Config}.
  */
@@ -181,6 +182,7 @@ export function apply(ctx: Context, config: Config): void {
   // Release dependent rows only after bind-dependent trust has been sampled once.
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
+  installProjectMemoryProposalTool(ctx)
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {
       addHarnessSourceSection(promptCtx, SOURCE_ROOT)
