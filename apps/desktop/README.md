@@ -8,14 +8,17 @@ window chrome, startup/shutdown, and packaging.
 
 The current v0.1 carrier is intentionally conservative:
 
-1. Electron starts a private DSH Web runtime as a child process.
-2. DSH binds only to `127.0.0.1` and receives `--port 0`, so the OS chooses an
+1. Electron opens a local Yanami startup surface immediately.
+2. In a checkout, the shell starts DSH with the package-manager Node inherited
+   from `pnpm`; a packaged app uses Electron's Node mode after Forge rebuilds
+   native dependencies for the packaged ABI.
+3. DSH binds only to `127.0.0.1` and receives `--port 0`, so the OS chooses an
    unused port.
-3. The desktop shell waits for DSH's canonical `dsh web: http://127.0.0.1:...`
-   readiness line.
-4. A hardened `BrowserWindow` loads that loopback URL with Node integration
-   disabled, context isolation enabled, and a sandboxed preload.
-5. App quit tears down the child runtime before Electron exits.
+4. The desktop shell waits for DSH's canonical `dsh web: http://127.0.0.1:...`
+   readiness line, then replaces the startup surface with the work area.
+5. A hardened `BrowserWindow` keeps Node integration disabled, context
+   isolation enabled, and a sandboxed preload.
+6. App quit tears down the child runtime before Electron exits.
 
 This gives the user a real desktop application without forking Goal, Workflow,
 Jobs, Session, Workspace, tools, or the agent loop. A later desktop carrier may
@@ -29,7 +32,7 @@ From the repository root:
 ```sh
 pnpm install
 pnpm run build
-pnpm --filter @yunyulai/yanami-workbench-desktop run dev
+pnpm --filter @deepseek-ai/dsh-desktop run dev
 ```
 
 The first `pnpm run build` is required because the desktop runtime launches the
@@ -43,8 +46,8 @@ From the repository root:
 ```sh
 pnpm install
 pnpm run build
-pnpm --filter @yunyulai/yanami-workbench-desktop run build
-pnpm --filter @yunyulai/yanami-workbench-desktop run make:mac
+pnpm --filter @deepseek-ai/dsh-desktop run build
+pnpm --filter @deepseek-ai/dsh-desktop run make:mac
 ```
 
 Electron Forge writes packaged output under `apps/desktop/out/`. The initial
