@@ -5,6 +5,8 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ProjectMemoryController,
   type ProjectMemoryRemote,
+  type SessionId,
+  type WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { ProjectMemoryHeaderAction } from '../src/client/project-memory/ProjectMemoryHeaderAction.tsx'
 import type {
@@ -13,6 +15,7 @@ import type {
 import { zh } from '../src/client/locales.ts'
 
 const WORKSPACE_ID = 'workspace-1' as WorkspaceId
+const SESSION_ID = 'session-1' as SessionId
 const EMPTY = {
   architecture: '',
   commands: '',
@@ -127,7 +130,26 @@ function props(
   controller: ProjectMemoryController,
 ): ProjectMemoryHeaderActionProps {
   const useProjectWorkspace: ProjectMemoryHeaderActionProps['useProjectWorkspace'] = selector => selector(workspace)
+  const workspaceState: WorkspaceListState = {
+    items: workspace === null ? [] : [{
+      workspaceId: workspace.workspaceId,
+      path: '/projects/yanami-test',
+      title: workspace.title,
+      sessionIds: [SESSION_ID],
+      createdAt: '2026-08-15T00:00:00.000Z',
+      updatedAt: '2026-08-15T00:00:00.000Z',
+    }],
+    archivedSessionIds: [],
+    state: 'idle',
+    phase: 'ready',
+    error: null,
+    baselinesReady: true,
+    recentWorkspaceId: workspace?.workspaceId,
+  }
+  const useWorkspaces: ProjectMemoryHeaderActionProps['useWorkspaces'] = selector => selector(workspaceState)
   return {
+    sessionId: SESSION_ID,
+    useWorkspaces,
     useProjectWorkspace,
     controllerFor: () => controller,
     t,
