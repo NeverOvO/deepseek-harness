@@ -133,10 +133,109 @@ describe('ProjectMemoryService', () => {
       text: 'Review before committing this decision.',
       source: 'session',
       sourceRef: 'session-1',
+      reviewHint: null,
+      rationale: null,
+      relation: 'new',
     }])
 
     await second.memoryFiber.dispose()
     await second.workspaceFiber.dispose()
+  })
+
+  it('deduplicates canonical pending text and classifies candidates against committed memory', async () => {
+    const result = await harness()
+    const workspace = await result.registry.create(await makeDir('relations'))
+    await result.memory.setSection(
+      workspace.id,
+      'decisions',
+      'WorkspaceId is the stable Project Memory key.\n\nKeep metadata outside repositories.',
+    )
+
+    const duplicate = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      '  WorkspaceId is the stable Project Memory key.  ',
+      'automatic',
+      'session-1',
+      'append',
+      'Same durable key decision.',
+    )
+    expect(duplicate).toMatchObject({ relation: 'duplicate', reviewHint: 'append' })
+
+    const samePending = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'WorkspaceId is the stable Project Memory key.',
+      'automatic',
+      'session-2',
+      'conflict',
+      'A later extraction must not duplicate the queue.',
+    )
+    expect(samePending.id).toBe(duplicate.id)
+    expect(result.memory.candidates(workspace.id)).toHaveLength(1)
+
+    const merge = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Use Remote envelopes for Project Memory transport.',
+      'automatic',
+      'session-1',
+      'append',
+      'Additive transport decision.',
+    )
+    expect(merge.relation).toBe('merge')
+
+    const conflict = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Use project paths as the durable Project Memory key.',
+      'automatic',
+      'session-1',
+      'conflict',
+      'This contradicts the WorkspaceId decision.',
+    )
+    expect(conflict).toMatchObject({
+      relation: 'conflict',
+      reviewHint: 'conflict',
+      rationale: 'This contradicts the WorkspaceId decision.',
+    })
+
+    const fresh = await result.memory.proposeCandidate(
+      workspace.id,
+      'commands',
+      'pnpm run constraints',
+      'manual',
+      null,
+    )
+    expect(fresh.relation).toBe('new')
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
+  })
+
+  it('accepting a duplicate clears review without duplicating committed text', async () => {
+    const result = await harness()
+    const workspace = await result.registry.create(await makeDir('duplicate-accept'))
+    const original = 'pnpm run build\n\npnpm run constraints'
+    await result.memory.setSection(workspace.id, 'commands', original)
+    const candidate = await result.memory.proposeCandidate(
+      workspace.id,
+      'commands',
+      ' pnpm run constraints ',
+      'automatic',
+      'session-1',
+      'append',
+      null,
+    )
+    expect(candidate.relation).toBe('duplicate')
+
+    await result.memory.acceptCandidate(workspace.id, candidate.id)
+
+    expect(result.memory.get(workspace.id)?.sections.commands).toBe(original)
+    expect(result.memory.candidates(workspace.id)).toHaveLength(0)
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
   })
 
   it('renders only populated sections in canonical model-context order', async () => {
