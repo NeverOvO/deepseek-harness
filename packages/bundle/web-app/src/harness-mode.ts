@@ -5,7 +5,7 @@
  * that upstream identity rather than inventing a second mode selector. Exact
  * shipped preset ids may opt into Yanami model-facing enhancements; unknown or
  * future preset ids fail closed so an upstream DSH update keeps its native
- * prompt, tool, and turn-stop behavior until Yanami explicitly reviews it.
+ * prompt, context, tool, and turn-stop behavior until Yanami explicitly reviews it.
  */
 
 /** Product-facing DSH Harness modes. */
@@ -23,6 +23,8 @@ export type DshBuiltInAgentPreset = 'standard' | 'code' | 'minimal' | 'cordis'
  */
 export interface YanamiHarnessPolicy {
   readonly mode: DshHarnessMode
+  /** Whether Yanami may append durable Project Memory to the assembled model context. */
+  readonly projectMemoryContext: boolean
   /** Whether Yanami may register project_memory_propose in the Agent scope. */
   readonly projectMemoryProposalTool: boolean
   /** Whether Yanami may add the Project Memory proposal policy prompt section. */
@@ -33,6 +35,7 @@ export interface YanamiHarnessPolicy {
 
 const STANDARD_POLICY: YanamiHarnessPolicy = Object.freeze({
   mode: 'standard',
+  projectMemoryContext: true,
   projectMemoryProposalTool: true,
   projectMemoryProposalPrompt: true,
   projectMemoryTurnReview: true,
@@ -40,6 +43,7 @@ const STANDARD_POLICY: YanamiHarnessPolicy = Object.freeze({
 
 const PTC_POLICY: YanamiHarnessPolicy = Object.freeze({
   mode: 'ptc',
+  projectMemoryContext: true,
   projectMemoryProposalTool: true,
   projectMemoryProposalPrompt: true,
   projectMemoryTurnReview: true,
@@ -47,6 +51,7 @@ const PTC_POLICY: YanamiHarnessPolicy = Object.freeze({
 
 const MINIMAL_POLICY: YanamiHarnessPolicy = Object.freeze({
   mode: 'minimal',
+  projectMemoryContext: false,
   projectMemoryProposalTool: false,
   projectMemoryProposalPrompt: false,
   projectMemoryTurnReview: false,
@@ -54,6 +59,7 @@ const MINIMAL_POLICY: YanamiHarnessPolicy = Object.freeze({
 
 const CREATIVE_POLICY: YanamiHarnessPolicy = Object.freeze({
   mode: 'creative',
+  projectMemoryContext: true,
   projectMemoryProposalTool: true,
   projectMemoryProposalPrompt: true,
   projectMemoryTurnReview: true,
@@ -63,10 +69,11 @@ const CREATIVE_POLICY: YanamiHarnessPolicy = Object.freeze({
  * Compatibility fence for custom or newly introduced upstream presets.
  *
  * The display mode remains Standard-compatible, but Yanami adds no model-facing
- * prompt, tool, or lifecycle turn until that preset has been explicitly mapped.
+ * prompt, context, tool, or lifecycle turn until that preset has been explicitly mapped.
  */
 const UNMAPPED_UPSTREAM_POLICY: YanamiHarnessPolicy = Object.freeze({
   mode: 'standard',
+  projectMemoryContext: false,
   projectMemoryProposalTool: false,
   projectMemoryProposalPrompt: false,
   projectMemoryTurnReview: false,
