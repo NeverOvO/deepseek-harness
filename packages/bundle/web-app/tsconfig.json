@@ -39,6 +39,9 @@
       "path": "../../core/system-prompt"
     },
     {
+      "path": "../../preset/agent-presets"
+    },
+    {
       "path": "../../shell/shell-env"
     },
     {
