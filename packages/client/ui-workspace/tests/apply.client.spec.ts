@@ -15,7 +15,7 @@ import { ProjectMemoryHeaderAction } from '../src/client/project-memory/ProjectM
 // the shipped Chinese copy, so they state the browser they assume.
 usePinnedBrowserLanguages('zh-CN')
 
-async function bench() {
+async function bench(options: { conversation?: boolean } = {}) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
@@ -61,6 +61,7 @@ async function bench() {
   } as never)
   ctx.provide('projectMemories', { forWorkspace: controllerFor } as never)
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
+  if (options.conversation !== false) ctx.provide('conversation', {} as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
@@ -116,6 +117,24 @@ describe('ui-workspace apply', () => {
     expect(after.slots.entries('conversation.hero.workspace')[0]!.component).toBe(WorkspacePicker)
     expect(after.slots.entries('conversation.session.header.actions')[0]!.component).toBe(ProjectMemoryHeaderAction)
     // expect(after.slots.entries('conversation.empty.workspace')[0]!.component).toBe(WorkspacePicker)
+  })
+
+  it('waits for the real conversation lifecycle before mounting Project Memory into the header', async () => {
+    const b = await bench({ conversation: false })
+    declare(b.slots, 'conversation.session.header.actions')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+
+    // A bare slot declaration is no longer enough: production ui-conversation
+    // creates its `conversation` service only after the real header/action row
+    // is assembled. This prevents Project Memory from binding to a transient
+    // declaration epoch during startup/HMR.
+    expect(b.slots.entries('conversation.session.header.actions')).toHaveLength(0)
+
+    b.ctx.provide('conversation', {} as never)
+    await vi.waitFor(() => {
+      expect(b.slots.entries('conversation.session.header.actions')).toHaveLength(1)
+      expect(b.slots.entries('conversation.session.header.actions')[0]!.component).toBe(ProjectMemoryHeaderAction)
+    })
   })
 
   it('routes browser actions and picker creation to the services', async () => {
