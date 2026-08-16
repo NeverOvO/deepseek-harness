@@ -8,7 +8,7 @@
  * package owns only the Workbench presentation.
  */
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the conversation service/SlotMap merges used by the
@@ -40,6 +40,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'workspace'
+const PROJECT_MEMORY_HEADER_DIAG = '[yanami/project-memory-header]'
 
 /**
  * Required services (cordis fiber inject). Sidebar/picker seats may arrive in
@@ -55,7 +56,17 @@ export const inject = ['slots', 'sessions', 'workspaces', 'projectMemories', 'lo
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  console.info(PROJECT_MEMORY_HEADER_DIAG, 'workspace-plugin-apply')
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  ctx.effect(() => ctx.slots.onEntryError((key, entry, error, info) => {
+    if (key !== 'conversation.session.header.actions') return
+    console.error(PROJECT_MEMORY_HEADER_DIAG, 'slot-entry-error', {
+      id: entry.options.id ?? null,
+      registrant: entry.registrant ?? null,
+      abdicated: info.abdicated,
+      error,
+    })
+  }), 'ui-workspace: Project Memory header diagnostics')
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
     const result = await ctx.sessions.search(query, signal)
@@ -117,19 +128,54 @@ export function apply(ctx: ClientContext): void {
   //    declaration so late declaration, teardown, or HMR recreates this entry
   //    against the current Slot declaration rather than stranding it on an old
   //    one. The Project Memory controller remains lazy until the user opens it.
-  ctx.inject(['slots', 'conversation', 'projectMemories'], (scope: ClientContext) => (
-    scope.slots.inject('conversation.session.header.actions', () => (
-      scope.slots.register({
+  ctx.inject(['slots', 'conversation', 'projectMemories', 'workspaces'], (scope: ClientContext) => {
+    console.info(PROJECT_MEMORY_HEADER_DIAG, 'conversation-services-ready', {
+      headerDeclared: scope.slots.spec('conversation.session.header.actions') !== undefined,
+      rawHeaderEntries: scope.slots.entries('conversation.session.header.actions').map(entry => entry.options.id ?? null),
+    })
+    return scope.slots.inject('conversation.session.header.actions', () => {
+      console.info(PROJECT_MEMORY_HEADER_DIAG, 'header-slot-live', {
+        rawHeaderEntriesBefore: scope.slots.entries('conversation.session.header.actions').map(entry => entry.options.id ?? null),
+      })
+      const dispose = scope.slots.register({
         name: 'conversation.session.header.actions',
         id: 'project-memory',
         order: 30,
         locale: NS,
-        inject: (): ProjectMemoryHeaderInjected => ({
-          controllerFor: workspaceId => scope.projectMemories.forWorkspace(workspaceId),
-        }),
+        inject: (sessionId?: SessionId): ProjectMemoryHeaderInjected => {
+          if (sessionId !== undefined) {
+            const state = scope.workspaces.list.getSnapshot()
+            const matched = state.items.find(item => item.sessionIds.includes(sessionId)) ?? null
+            console.info(PROJECT_MEMORY_HEADER_DIAG, 'renderer-entry-inject', {
+              sessionId,
+              workspaceCount: state.items.length,
+              matchedWorkspaceId: matched?.workspaceId ?? null,
+              componentWillReturnNull: matched === null,
+              memberships: state.items.map(item => ({
+                workspaceId: item.workspaceId,
+                title: item.title,
+                containsSession: item.sessionIds.includes(sessionId),
+                sessionCount: item.sessionIds.length,
+              })),
+            })
+          } else {
+            console.info(PROJECT_MEMORY_HEADER_DIAG, 'entry-inject-without-session')
+          }
+          return {
+            controllerFor: workspaceId => scope.projectMemories.forWorkspace(workspaceId),
+          }
+        },
       }, ProjectMemoryHeaderAction)
-    ))
-  ))
+      console.info(PROJECT_MEMORY_HEADER_DIAG, 'header-entry-registered', {
+        rawHeaderEntriesAfter: scope.slots.entries('conversation.session.header.actions').map(entry => entry.options.id ?? null),
+        winningHeaderEntries: scope.slots.entriesOfSlot('conversation.session.header.actions').map(entry => entry.options.id ?? null),
+      })
+      return () => {
+        console.info(PROJECT_MEMORY_HEADER_DIAG, 'header-entry-disposed')
+        dispose()
+      }
+    })
+  })
 
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.
