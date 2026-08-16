@@ -54,11 +54,11 @@ const LOW_SIGNAL_PATTERNS = [
   /^(?:完成|已完成|任务完成|全部通过|全绿|测试通过|测试已通过|构建通过|构建已通过|构建成功)[。.!！\s]*$/u,
 ] as const
 
-const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Before concluding each turn or marking a goal/mission complete, perform one final Project Memory check and stage any qualifying facts before the final response or completion action. For every proposal, classify confidence as high, medium, or low and durability as project-wide or task-local; low-confidence and task-local proposals are intentionally discarded by the Host quality gate. Classify the candidate relationship as additive, supersedes, or conflicts relative to remembered Project Memory, and give a short rationale when useful. Prefer one compact candidate over several near-duplicates. Never stage transient progress such as a task merely being done, tests merely passing, or a build merely being green; a durable rule such as "release requires all gates green" is different and may qualify. The Host also suppresses committed duplicates, near-duplicate pending candidates, overfull review queues, and additive growth once a section reaches its automatic-growth budget. Relationship hints are only advisory review metadata and never authorize replacement. Do not stage unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
+const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Before concluding each turn or marking a goal/mission complete, perform one final Project Memory check and stage any qualifying facts before the final response or completion action. For every proposal, classify confidence as high, medium, or low and durability as project-wide or task-local; low-confidence and task-local proposals are intentionally discarded by the Host quality gate. Classify the candidate relationship as additive, supersedes, or conflicts relative to remembered Project Memory, and give a short rationale when useful. If and only if relationship is supersedes, copy the exact existing Project Memory block or line being replaced into supersedesText; do not paraphrase the target. The Host revalidates that exact target at human acceptance time and refuses stale, missing, ambiguous, or explicit-conflict candidates rather than guessing. Prefer one compact candidate over several near-duplicates. Never stage transient progress such as a task merely being done, tests merely passing, or a build merely being green; a durable rule such as "release requires all gates green" is different and may qualify. The Host also suppresses committed duplicates, near-duplicate pending candidates, overfull review queues, and additive growth once a section reaches its automatic-growth budget. Relationship hints are advisory review metadata: even a valid supersedes proposal cannot write until a human accepts it. Do not stage unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
 
-const AUTOMATIC_REVIEW_PROMPT = `Internal Project Memory lifecycle review. Inspect the work completed in the turn that is about to close. If it established NEW durable project-wide facts that should guide future sessions, call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` for at most two strong candidates. Set durability to project-wide. Set confidence to high only for explicit durable facts, medium for strongly supported durable facts, and low when uncertain; low confidence is discarded. Do not propose transient progress, a task merely being done, tests merely passing, a build merely being green, guesses, secrets, credentials, personal data, one-off task details, or facts already present in remembered Project Memory. Prefer one compact candidate that subsumes near-duplicate observations. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
+const AUTOMATIC_REVIEW_PROMPT = `Internal Project Memory lifecycle review. Inspect the work completed in the turn that is about to close. If it established NEW durable project-wide facts that should guide future sessions, call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` for at most two strong candidates. Set durability to project-wide. Set confidence to high only for explicit durable facts, medium for strongly supported durable facts, and low when uncertain; low confidence is discarded. When a new fact truly replaces remembered Project Memory, set relationship to supersedes and copy the exact old remembered block or line into supersedesText; otherwise do not set supersedesText. Do not propose transient progress, a task merely being done, tests merely passing, a build merely being green, guesses, secrets, credentials, personal data, one-off task details, or facts already present in remembered Project Memory. Prefer one compact candidate that subsumes near-duplicate observations. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
 
-const AUTOMATIC_MISSION_REVIEW_PROMPT = `Internal Project Memory mission-completion review. A goal/mission completed during the turn that is about to close. Inspect the completed mission for NEW durable project-wide facts that should guide future sessions, especially stable decisions, architecture, conventions, repeatable commands, durable known issues, and definition-of-done criteria. Call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` for at most two strong candidates. Set durability to project-wide. Set confidence to high only for explicit durable facts, medium for strongly supported durable facts, and low when uncertain; low confidence is discarded. Do not propose the mere fact that the mission completed, transient progress, tests merely passing, a build merely being green, guesses, secrets, credentials, personal data, one-off task details, or facts already present in remembered Project Memory. Prefer one compact candidate that subsumes near-duplicate observations. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
+const AUTOMATIC_MISSION_REVIEW_PROMPT = `Internal Project Memory mission-completion review. A goal/mission completed during the turn that is about to close. Inspect the completed mission for NEW durable project-wide facts that should guide future sessions, especially stable decisions, architecture, conventions, repeatable commands, durable known issues, and definition-of-done criteria. Call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` for at most two strong candidates. Set durability to project-wide. Set confidence to high only for explicit durable facts, medium for strongly supported durable facts, and low when uncertain; low confidence is discarded. When a new fact truly replaces remembered Project Memory, set relationship to supersedes and copy the exact old remembered block or line into supersedesText; otherwise do not set supersedesText. Do not propose the mere fact that the mission completed, transient progress, tests merely passing, a build merely being green, guesses, secrets, credentials, personal data, one-off task details, or facts already present in remembered Project Memory. Prefer one compact candidate that subsumes near-duplicate observations. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
 
 type AutomaticReviewSource = Extract<ProjectMemoryCandidateSource, 'session' | 'mission'>
 type CandidateConfidence = typeof CONFIDENCE_NAMES[number]
@@ -165,9 +165,13 @@ function nearDuplicatePendingCandidate(
   section: ProjectMemorySection,
   text: string,
   reviewHint: ProjectMemoryCandidateReviewHint,
+  supersedesText: string | null,
 ): ProjectMemoryCandidateView | undefined {
+  const canonicalSupersedes = canonicalCandidateText(supersedesText ?? '')
   return candidates.find(candidate => candidate.section === section
     && (candidate.reviewHint === null || candidate.reviewHint === reviewHint)
+    && (reviewHint !== 'supersedes'
+      || canonicalCandidateText(candidate.supersedesText ?? '') === canonicalSupersedes)
     && candidateSimilarity(section, candidate.text, text) >= NEAR_DUPLICATE_THRESHOLD)
 }
 
@@ -205,9 +209,10 @@ function proposalTool(
       'Propose one durable project-wide fact for human review. Use this only for stable architecture, '
       + 'commands, conventions, decisions, known issues, or definition-of-done facts that should survive '
       + 'future sessions. Classify confidence and durability explicitly. Low-confidence, task-local, transient, '
-      + 'duplicate, near-duplicate, over-budget, and queue-saturating proposals are skipped. Do not propose '
-      + 'secrets, credentials, personal data, or one-off task details. Relationship hints are advisory only. '
-      + 'This tool only stages a candidate; it never commits or replaces Project Memory.',
+      + 'duplicate, near-duplicate, over-budget, and queue-saturating proposals are skipped. For supersedes, '
+      + 'copy the exact old Project Memory block or line into supersedesText; the Host revalidates it at acceptance. '
+      + 'Do not propose secrets, credentials, personal data, or one-off task details. '
+      + 'This tool only stages a candidate; it never commits or replaces Project Memory by itself.',
     parameters: {
       section: {
         type: 'string',
@@ -224,7 +229,11 @@ function proposalTool(
         type: 'string',
         enum: RELATIONSHIP_NAMES,
         required: true,
-        description: 'Advisory relationship to remembered Project Memory: additive, supersedes, or conflicts. This never authorizes replacement.',
+        description: 'Relationship to remembered Project Memory: additive, supersedes, or conflicts. Human acceptance is always required.',
+      },
+      supersedesText: {
+        type: 'string',
+        description: 'Required only for supersedes: copy the exact existing Project Memory block or line to replace. Never paraphrase it.',
       },
       confidence: {
         type: 'string',
@@ -287,15 +296,27 @@ function proposalTool(
     },
     async execute(args) {
       const text = args.text.trim()
+      const supersedesText = args.supersedesText?.trim() ?? null
       const rationale = args.rationale?.trim() ?? null
       if (text.length === 0) throw new Error('Project Memory candidate text must not be empty')
       if (text.length > MAX_CANDIDATE_CHARS) {
         throw new Error(`Project Memory candidate text exceeds ${String(MAX_CANDIDATE_CHARS)} characters`)
       }
+      if (args.relationship === 'supersedes' && supersedesText === null) {
+        throw new Error('Project Memory supersedes candidates require exact supersedesText')
+      }
+      if (args.relationship !== 'supersedes' && supersedesText !== null) {
+        throw new Error('Project Memory supersedesText is only valid when relationship is supersedes')
+      }
+      if (supersedesText !== null && supersedesText.length > MAX_CANDIDATE_CHARS) {
+        throw new Error(`Project Memory supersedesText exceeds ${String(MAX_CANDIDATE_CHARS)} characters`)
+      }
       if (rationale !== null && rationale.length > MAX_RATIONALE_CHARS) {
         throw new Error(`Project Memory candidate rationale exceeds ${String(MAX_RATIONALE_CHARS)} characters`)
       }
-      if (containsSensitiveText(text) || (rationale !== null && containsSensitiveText(rationale))) {
+      if (containsSensitiveText(text)
+        || (supersedesText !== null && containsSensitiveText(supersedesText))
+        || (rationale !== null && containsSensitiveText(rationale))) {
         throw new Error('Project Memory candidate looks like it contains a credential or secret')
       }
       if (args.confidence === 'low') return skipped('skipped-low-confidence', args.section)
@@ -308,7 +329,13 @@ function proposalTool(
       if (committedContainsCandidate(currentSection, text)) {
         return skipped('skipped-already-recorded', args.section)
       }
-      const equivalent = nearDuplicatePendingCandidate(pending, args.section, text, reviewHint)
+      const equivalent = nearDuplicatePendingCandidate(
+        pending,
+        args.section,
+        text,
+        reviewHint,
+        supersedesText,
+      )
       if (equivalent !== undefined) {
         return {
           candidateId: equivalent.id,
@@ -319,7 +346,7 @@ function proposalTool(
       const projectedChars = currentSection.trim().length === 0
         ? text.length
         : currentSection.trimEnd().length + 2 + text.length
-      if (projectedChars > MAX_AUTOMATIC_SECTION_CHARS) {
+      if (args.relationship === 'additive' && projectedChars > MAX_AUTOMATIC_SECTION_CHARS) {
         return skipped('skipped-section-full', args.section)
       }
       if (pending.length >= MAX_PENDING_CANDIDATES
@@ -339,6 +366,7 @@ function proposalTool(
         sessionId,
         reviewHint,
         auditedRationale,
+        supersedesText,
       )
       return {
         candidateId: candidate.id,
