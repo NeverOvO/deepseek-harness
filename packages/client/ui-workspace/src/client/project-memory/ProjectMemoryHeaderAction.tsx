@@ -39,6 +39,20 @@ function candidateSourceLabel(source: string): WorkspaceKey {
   return 'memory.candidates.source.manual'
 }
 
+function candidateRelationLabel(relation: string): WorkspaceKey {
+  if (relation === 'duplicate') return 'memory.candidates.relation.duplicate'
+  if (relation === 'merge') return 'memory.candidates.relation.merge'
+  if (relation === 'conflict') return 'memory.candidates.relation.conflict'
+  return 'memory.candidates.relation.new'
+}
+
+function candidateRelationHelp(relation: string): WorkspaceKey {
+  if (relation === 'duplicate') return 'memory.candidates.relationHelp.duplicate'
+  if (relation === 'merge') return 'memory.candidates.relationHelp.merge'
+  if (relation === 'conflict') return 'memory.candidates.relationHelp.conflict'
+  return 'memory.candidates.relationHelp.new'
+}
+
 /** Header trigger owns the always-on lightweight candidate-count subscription. */
 function ProjectMemoryTrigger({
   controller,
@@ -268,8 +282,14 @@ function ProjectMemoryEditor({
                         <span>{t(row?.label ?? 'memory.section.decisions')}</span>
                         <span>·</span>
                         <span>{t(candidateSourceLabel(candidate.source))}</span>
+                        <span>·</span>
+                        <span>{t(candidateRelationLabel(candidate.relation))}</span>
                       </div>
                       <div className={css.candidateText}>{candidate.text}</div>
+                      <div className={css.help}>{t(candidateRelationHelp(candidate.relation))}</div>
+                      {candidate.rationale !== null && candidate.rationale.trim() !== '' && (
+                        <div className={css.help}>{candidate.rationale}</div>
+                      )}
                       <div className={css.candidateActions}>
                         <Button
                           variant="outline"
