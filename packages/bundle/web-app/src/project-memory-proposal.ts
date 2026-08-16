@@ -15,7 +15,10 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-workspace/project-memory'
 import type {
-  ProjectMemoryCandidateReviewHint, ProjectMemoryCandidateSource, ProjectMemorySection,
+  ProjectMemoryCandidateReviewHint,
+  ProjectMemoryCandidateSource,
+  ProjectMemoryCandidateView,
+  ProjectMemorySection,
 } from '@deepseek-ai/dsh-workspace/project-memory-types'
 
 /** Stable model-facing tool name. */
@@ -31,23 +34,43 @@ const SECTION_NAMES = [
 ] as const satisfies readonly ProjectMemorySection[]
 
 const RELATIONSHIP_NAMES = ['additive', 'supersedes', 'conflicts'] as const
+const CONFIDENCE_NAMES = ['high', 'medium', 'low'] as const
+const DURABILITY_NAMES = ['project-wide', 'task-local'] as const
 
 const MAX_CANDIDATE_CHARS = 8_000
 const MAX_RATIONALE_CHARS = 2_000
 const MAX_PENDING_CANDIDATES = 100
+const MAX_PENDING_CANDIDATES_PER_SECTION = 24
+const MAX_AUTOMATIC_SECTION_CHARS = 12_000
+const NEAR_DUPLICATE_THRESHOLD = 0.9
 const SENSITIVE_PATTERNS = [
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/u,
   /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16})\b/u,
   /\b(?:password|passwd|secret|token|api[_ -]?key|密码|密钥|令牌)\s*[:=]\s*["']?[^\s"']{8,}/iu,
 ] as const
+const LOW_SIGNAL_PATTERNS = [
+  /^(?:done|completed|finished|task complete|all green|all tests? passed|tests? passed|build passed|build succeeded|build successful|ci passed|ci green)[.!。！\s]*$/iu,
+  /^(?:完成|已完成|任务完成|全部通过|全绿|测试通过|测试已通过|构建通过|构建已通过|构建成功)[。.!！\s]*$/u,
+] as const
 
-const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Before concluding each turn or marking a goal/mission complete, perform one final Project Memory check and stage any qualifying facts before the final response or completion action. Classify the candidate relationship as additive, supersedes, or conflicts relative to remembered Project Memory, and give a short rationale when useful. This relationship is only an advisory review hint: it never authorizes replacing committed memory. Do not stage transient progress, temporary observations, unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
+const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Before concluding each turn or marking a goal/mission complete, perform one final Project Memory check and stage any qualifying facts before the final response or completion action. For every proposal, classify confidence as high, medium, or low and durability as project-wide or task-local; low-confidence and task-local proposals are intentionally discarded by the Host quality gate. Classify the candidate relationship as additive, supersedes, or conflicts relative to remembered Project Memory, and give a short rationale when useful. Prefer one compact candidate over several near-duplicates. Never stage transient progress such as a task merely being done, tests merely passing, or a build merely being green; a durable rule such as "release requires all gates green" is different and may qualify. The Host also suppresses committed duplicates, near-duplicate pending candidates, overfull review queues, and additive growth once a section reaches its automatic-growth budget. Relationship hints are only advisory review metadata and never authorize replacement. Do not stage unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
 
-const AUTOMATIC_REVIEW_PROMPT = `Internal Project Memory lifecycle review. Inspect the work completed in the turn that is about to close. If it established any NEW durable project-wide fact that should guide future sessions, call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` once per qualifying fact using the correct section and relationship. Do not propose transient progress, one-off task details, guesses, secrets, credentials, personal data, or facts already present in remembered Project Memory. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
+const AUTOMATIC_REVIEW_PROMPT = `Internal Project Memory lifecycle review. Inspect the work completed in the turn that is about to close. If it established NEW durable project-wide facts that should guide future sessions, call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` for at most two strong candidates. Set durability to project-wide. Set confidence to high only for explicit durable facts, medium for strongly supported durable facts, and low when uncertain; low confidence is discarded. Do not propose transient progress, a task merely being done, tests merely passing, a build merely being green, guesses, secrets, credentials, personal data, one-off task details, or facts already present in remembered Project Memory. Prefer one compact candidate that subsumes near-duplicate observations. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
 
-const AUTOMATIC_MISSION_REVIEW_PROMPT = `Internal Project Memory mission-completion review. A goal/mission completed during the turn that is about to close. Inspect the completed mission for NEW durable project-wide facts that should guide future sessions, especially stable decisions, architecture, conventions, repeatable commands, durable known issues, and definition-of-done criteria. Call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` once per qualifying fact using the correct section and relationship. Do not propose transient progress, one-off task details, guesses, secrets, credentials, personal data, or facts already present in remembered Project Memory. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
+const AUTOMATIC_MISSION_REVIEW_PROMPT = `Internal Project Memory mission-completion review. A goal/mission completed during the turn that is about to close. Inspect the completed mission for NEW durable project-wide facts that should guide future sessions, especially stable decisions, architecture, conventions, repeatable commands, durable known issues, and definition-of-done criteria. Call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` for at most two strong candidates. Set durability to project-wide. Set confidence to high only for explicit durable facts, medium for strongly supported durable facts, and low when uncertain; low confidence is discarded. Do not propose the mere fact that the mission completed, transient progress, tests merely passing, a build merely being green, guesses, secrets, credentials, personal data, one-off task details, or facts already present in remembered Project Memory. Prefer one compact candidate that subsumes near-duplicate observations. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
 
 type AutomaticReviewSource = Extract<ProjectMemoryCandidateSource, 'session' | 'mission'>
+type CandidateConfidence = typeof CONFIDENCE_NAMES[number]
+type CandidateDurability = typeof DURABILITY_NAMES[number]
+type ProposalStatus =
+  | 'pending-review'
+  | 'already-pending'
+  | 'skipped-low-confidence'
+  | 'skipped-task-local'
+  | 'skipped-low-signal'
+  | 'skipped-already-recorded'
+  | 'skipped-section-full'
+  | 'skipped-queue-full'
 type SteerMessage = Parameters<Agent['steer']>[0]
 
 /** Resolve only already-registered Workspace ownership; never create one as a tool side effect. */
@@ -66,12 +89,104 @@ function containsSensitiveText(text: string): boolean {
   return SENSITIVE_PATTERNS.some(pattern => pattern.test(text))
 }
 
+/** Conservative deterministic filter for status-only facts that should not become durable memory. */
+function isLowSignalCandidate(section: ProjectMemorySection, text: string): boolean {
+  if (section === 'commands') return false
+  const normalized = text.trim().replace(/\s+/gu, ' ')
+  return LOW_SIGNAL_PATTERNS.some(pattern => pattern.test(normalized))
+}
+
+/** Stable comparison form used for exact block/line duplicate checks. */
+function canonicalCandidateText(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** Exact/block/line containment, matching the committed-memory host policy. */
+function committedContainsCandidate(current: string, candidate: string): boolean {
+  const target = canonicalCandidateText(candidate)
+  if (target.length === 0) return false
+  const committed = canonicalCandidateText(current)
+  if (committed === target) return true
+  const blocks = current.split(/\n\s*\n/).map(canonicalCandidateText)
+  if (blocks.includes(target)) return true
+  const lines = current.split('\n').map(canonicalCandidateText).filter(Boolean)
+  return lines.includes(target)
+}
+
+/** Unicode-aware compact form for conservative language-independent near-duplicate matching. */
+function similarityText(text: string): string {
+  return text
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+function trigrams(text: string): ReadonlySet<string> {
+  if (text.length === 0) return new Set()
+  if (text.length < 3) return new Set([text])
+  const grams = new Set<string>()
+  for (let index = 0; index <= text.length - 3; index += 1) {
+    grams.add(text.slice(index, index + 3))
+  }
+  return grams
+}
+
+/** Sørensen-Dice trigram similarity; commands intentionally use exact matching only. */
+function candidateSimilarity(
+  section: ProjectMemorySection,
+  left: string,
+  right: string,
+): number {
+  if (section === 'commands') {
+    return canonicalCandidateText(left) === canonicalCandidateText(right) ? 1 : 0
+  }
+  const leftText = similarityText(left)
+  const rightText = similarityText(right)
+  if (leftText === rightText && leftText.length > 0) return 1
+  const leftGrams = trigrams(leftText)
+  const rightGrams = trigrams(rightText)
+  if (leftGrams.size === 0 || rightGrams.size === 0) return 0
+  let overlap = 0
+  for (const gram of leftGrams) {
+    if (rightGrams.has(gram)) overlap += 1
+  }
+  return (2 * overlap) / (leftGrams.size + rightGrams.size)
+}
+
+/** Find a pending candidate close enough that another model proposal would only add review noise. */
+function nearDuplicatePendingCandidate(
+  candidates: readonly ProjectMemoryCandidateView[],
+  section: ProjectMemorySection,
+  text: string,
+  reviewHint: ProjectMemoryCandidateReviewHint,
+): ProjectMemoryCandidateView | undefined {
+  return candidates.find(candidate => candidate.section === section
+    && (candidate.reviewHint === null || candidate.reviewHint === reviewHint)
+    && candidateSimilarity(section, candidate.text, text) >= NEAR_DUPLICATE_THRESHOLD)
+}
+
 function reviewHintFor(
   relationship: typeof RELATIONSHIP_NAMES[number],
 ): ProjectMemoryCandidateReviewHint {
   if (relationship === 'supersedes') return 'supersedes'
   if (relationship === 'conflicts') return 'conflict'
   return 'append'
+}
+
+/** Keep confidence auditable without migrating the already-shipped candidate storage schema. */
+function auditRationale(confidence: Exclude<CandidateConfidence, 'low'>, rationale: string | null): string {
+  const prefix = `[confidence: ${confidence}]`
+  return rationale === null ? prefix : `${prefix} ${rationale}`
+}
+
+function skipped(status: Exclude<ProposalStatus, 'pending-review' | 'already-pending'>, section: ProjectMemorySection) {
+  return { section, status }
 }
 
 /**
@@ -89,9 +204,10 @@ function proposalTool(
     description:
       'Propose one durable project-wide fact for human review. Use this only for stable architecture, '
       + 'commands, conventions, decisions, known issues, or definition-of-done facts that should survive '
-      + 'future sessions. Do not propose transient progress, temporary observations, secrets, credentials, '
-      + 'personal data, or one-off task details. Relationship hints are advisory only. This tool only stages '
-      + 'a candidate; it never commits or replaces Project Memory.',
+      + 'future sessions. Classify confidence and durability explicitly. Low-confidence, task-local, transient, '
+      + 'duplicate, near-duplicate, over-budget, and queue-saturating proposals are skipped. Do not propose '
+      + 'secrets, credentials, personal data, or one-off task details. Relationship hints are advisory only. '
+      + 'This tool only stages a candidate; it never commits or replaces Project Memory.',
     parameters: {
       section: {
         type: 'string',
@@ -110,9 +226,21 @@ function proposalTool(
         required: true,
         description: 'Advisory relationship to remembered Project Memory: additive, supersedes, or conflicts. This never authorizes replacement.',
       },
+      confidence: {
+        type: 'string',
+        enum: CONFIDENCE_NAMES,
+        required: true,
+        description: 'Confidence that this is a correct durable fact: high, medium, or low. Low-confidence proposals are discarded.',
+      },
+      durability: {
+        type: 'string',
+        enum: DURABILITY_NAMES,
+        required: true,
+        description: 'Whether the fact should guide future project sessions. Task-local proposals are discarded.',
+      },
       rationale: {
         type: 'string',
-        description: 'Optional concise reason for the relationship classification. Never include secrets or personal data.',
+        description: 'Optional concise evidence or reason for the relationship classification. Never include secrets or personal data.',
       },
     },
     output: {
@@ -120,15 +248,42 @@ function proposalTool(
         type: 'object',
         additionalProperties: false,
         properties: {
-          candidateId: { type: 'string', required: true },
+          candidateId: { type: 'string' },
           section: { type: 'string', enum: SECTION_NAMES, required: true },
-          status: { type: 'string', const: 'pending-review', required: true },
+          status: {
+            type: 'string',
+            enum: [
+              'pending-review',
+              'already-pending',
+              'skipped-low-confidence',
+              'skipped-task-local',
+              'skipped-low-signal',
+              'skipped-already-recorded',
+              'skipped-section-full',
+              'skipped-queue-full',
+            ],
+            required: true,
+          },
         },
       },
-      render: (_args, value) => [{
-        type: 'text',
-        text: `Project Memory candidate ${value.candidateId} is pending human review in ${value.section}. It is not committed memory yet.`,
-      }],
+      render: (_args, value) => {
+        if (value.status === 'pending-review') {
+          return [{
+            type: 'text',
+            text: `Project Memory candidate ${value.candidateId ?? ''} is pending human review in ${value.section}. It is not committed memory yet.`,
+          }]
+        }
+        if (value.status === 'already-pending') {
+          return [{
+            type: 'text',
+            text: `A materially equivalent Project Memory candidate ${value.candidateId ?? ''} is already pending review in ${value.section}. No duplicate was staged.`,
+          }]
+        }
+        return [{
+          type: 'text',
+          text: `Project Memory proposal was not staged (${value.status}) for ${value.section}.`,
+        }]
+      },
     },
     async execute(args) {
       const text = args.text.trim()
@@ -143,8 +298,38 @@ function proposalTool(
       if (containsSensitiveText(text) || (rationale !== null && containsSensitiveText(rationale))) {
         throw new Error('Project Memory candidate looks like it contains a credential or secret')
       }
-      if (ctx.projectMemory.candidates(workspaceId).length >= MAX_PENDING_CANDIDATES) {
-        throw new Error(`Project Memory already has ${String(MAX_PENDING_CANDIDATES)} candidates pending review`)
+      if (args.confidence === 'low') return skipped('skipped-low-confidence', args.section)
+      if (args.durability === 'task-local') return skipped('skipped-task-local', args.section)
+      if (isLowSignalCandidate(args.section, text)) return skipped('skipped-low-signal', args.section)
+
+      const reviewHint = reviewHintFor(args.relationship)
+      const pending = ctx.projectMemory.candidates(workspaceId)
+      const currentSection = ctx.projectMemory.get(workspaceId)?.sections[args.section] ?? ''
+      if (committedContainsCandidate(currentSection, text)) {
+        return skipped('skipped-already-recorded', args.section)
+      }
+      const equivalent = nearDuplicatePendingCandidate(pending, args.section, text, reviewHint)
+      if (equivalent !== undefined) {
+        return {
+          candidateId: equivalent.id,
+          section: equivalent.section,
+          status: 'already-pending' as const,
+        }
+      }
+      const projectedChars = currentSection.trim().length === 0
+        ? text.length
+        : currentSection.trimEnd().length + 2 + text.length
+      if (projectedChars > MAX_AUTOMATIC_SECTION_CHARS) {
+        return skipped('skipped-section-full', args.section)
+      }
+      if (pending.length >= MAX_PENDING_CANDIDATES
+        || pending.filter(candidate => candidate.section === args.section).length >= MAX_PENDING_CANDIDATES_PER_SECTION) {
+        return skipped('skipped-queue-full', args.section)
+      }
+
+      const auditedRationale = auditRationale(args.confidence, rationale)
+      if (auditedRationale.length > MAX_RATIONALE_CHARS) {
+        throw new Error(`Project Memory candidate rationale exceeds ${String(MAX_RATIONALE_CHARS)} characters after confidence metadata`)
       }
       const candidate = await ctx.projectMemory.proposeCandidate(
         workspaceId,
@@ -152,8 +337,8 @@ function proposalTool(
         text,
         source(),
         sessionId,
-        reviewHintFor(args.relationship),
-        rationale,
+        reviewHint,
+        auditedRationale,
       )
       return {
         candidateId: candidate.id,
@@ -305,6 +490,11 @@ export const internals = Object.freeze({
   automaticReviewSource,
   automaticReviewMessage,
   containsSensitiveText,
+  isLowSignalCandidate,
+  candidateSimilarity,
+  nearDuplicatePendingCandidate,
+  committedContainsCandidate,
+  auditRationale,
   reviewHintFor,
 })
 
