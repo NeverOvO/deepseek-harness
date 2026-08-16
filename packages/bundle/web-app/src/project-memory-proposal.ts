@@ -61,7 +61,6 @@ const AUTOMATIC_MISSION_REVIEW_PROMPT = `Internal Project Memory mission-complet
 
 type AutomaticReviewSource = Extract<ProjectMemoryCandidateSource, 'session' | 'mission'>
 type CandidateConfidence = typeof CONFIDENCE_NAMES[number]
-type CandidateDurability = typeof DURABILITY_NAMES[number]
 type ProposalStatus =
   | 'pending-review'
   | 'already-pending'
