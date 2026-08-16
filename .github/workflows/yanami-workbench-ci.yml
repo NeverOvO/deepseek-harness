@@ -103,6 +103,7 @@ jobs:
           packages/bundle/web-app/tests/project-memory-consolidation.spec.ts
           packages/workspace/workspace/tests/project-memory-consolidation.spec.ts
           packages/client/ui-workspace/tests/project-memory-header.client.spec.tsx
+          packages/client/ui-workspace/tests/project-memory-consolidation-header.client.spec.tsx
           packages/client/ui-conversation/tests/yanami-home.client.spec.tsx
           packages/plan/plan-mode/tests
 
