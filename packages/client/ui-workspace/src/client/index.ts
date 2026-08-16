@@ -11,6 +11,9 @@ import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the conversation service/SlotMap merges used by the
+// lifecycle-bound Project Memory header contribution below.
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './WorkspaceBrowser.tsx'
@@ -39,19 +42,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'workspace'
 
 /**
- * Required services (cordis fiber inject). The target slots are declared by
- * the ui-sidebar / ui-conversation applies, whose activation order relative
- * to this one is NOT constrained: dsh.client.inject edges are informational
- * (loading/prefetch metadata, never apply sequencing) and neither owner
- * provides a waitable service. apply therefore depends on each slot
- * declaration through `slots.inject()` instead of assuming order.
+ * Required services (cordis fiber inject). Sidebar/picker seats may arrive in
+ * either order, so those surfaces still follow declaration lifetimes through
+ * `slots.inject()`. The Project Memory header contribution additionally waits
+ * for the conversation service below: that service is mounted only after the
+ * real session-header/action declaration has been registered, matching the
+ * lifecycle used by the other production header actions.
  */
 export const inject = ['slots', 'sessions', 'workspaces', 'projectMemories', 'locale']
 
 /**
- * Register the browser, picker, and Project Memory action once their slot
- * declarations are on the ledger. Inject factories return plain callbacks;
- * data reads use framework-bound observable hooks.
+ * Register the browser, picker, and Project Memory action.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -110,19 +111,24 @@ export function apply(ctx: ClientContext): void {
     hooks: { directoryFlow: pickerFlowSource },
   })
 
-  // Additive Project Memory entry beside the session title. Session → Workspace
-  // membership is resolved by the renderer's standard useWorkspaces seat, the
-  // exact Host-backed source that drives the sidebar. The injected business
-  // face stays controller-only and is not touched until the user opens memory.
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions',
-    id: 'project-memory',
-    order: 30,
-    locale: NS,
-    inject: (): ProjectMemoryHeaderInjected => ({
-      controllerFor: workspaceId => ctx.projectMemories.forWorkspace(workspaceId),
-    }),
-  }, ProjectMemoryHeaderAction))
+  // Production session-header entries must share the conversation fiber's
+  // lifetime. Waiting for the `conversation` service is stronger than merely
+  // observing a transient child declaration: ui-conversation mounts that
+  // service only after `conversation.session.header` has declared its action
+  // row. On conversation teardown/reload this nested scope is disposed and
+  // recreated with the new header declaration, so the Project Memory entry
+  // cannot be stranded on an old declaration epoch.
+  ctx.inject(['slots', 'conversation', 'projectMemories'], (scope: ClientContext) => (
+    scope.slots.register({
+      name: 'conversation.session.header.actions',
+      id: 'project-memory',
+      order: 30,
+      locale: NS,
+      inject: (): ProjectMemoryHeaderInjected => ({
+        controllerFor: workspaceId => scope.projectMemories.forWorkspace(workspaceId),
+      }),
+    }, ProjectMemoryHeaderAction)
+  ))
 
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.
