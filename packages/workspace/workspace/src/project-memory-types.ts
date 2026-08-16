@@ -53,7 +53,7 @@ export type ProjectMemoryCandidateSource = 'manual' | 'session' | 'mission' | 'a
 export type ProjectMemoryCandidateReviewHint = 'append' | 'supersedes' | 'conflict'
 
 /** Host-computed relationship between a pending candidate and committed memory. */
-export type ProjectMemoryCandidateRelation = 'new' | 'duplicate' | 'merge' | 'conflict'
+export type ProjectMemoryCandidateRelation = 'new' | 'duplicate' | 'merge' | 'supersedes' | 'conflict'
 
 /** One pending candidate waiting for human review. */
 export interface ProjectMemoryCandidateView {
@@ -66,6 +66,8 @@ export interface ProjectMemoryCandidateView {
   readonly createdAt: string
   /** Advisory extractor signal retained for review/audit; never an overwrite instruction. */
   readonly reviewHint: ProjectMemoryCandidateReviewHint | null
+  /** Exact committed block/line an extractor proposes replacing, when any. */
+  readonly supersedesText: string | null
   /** Optional concise explanation produced by the extractor. */
   readonly rationale: string | null
   /** Authoritative Host classification against the current committed section. */
@@ -108,6 +110,8 @@ export interface ProjectMemoryProposeCandidateRequest {
   readonly source: ProjectMemoryCandidateSource
   readonly sourceRef: string | null
   readonly reviewHint?: ProjectMemoryCandidateReviewHint
+  /** Exact existing block/line proposed for replacement when `reviewHint` is `supersedes`. */
+  readonly supersedesText?: string | null
   readonly rationale?: string | null
 }
 
@@ -146,6 +150,13 @@ export interface ProjectMemoryCandidateNotFound {
   readonly candidateId: string
 }
 
+/** A candidate cannot be safely accepted against the current committed section. */
+export interface ProjectMemoryCandidateConflict {
+  readonly code: 'candidate-conflict'
+  readonly workspaceId: ProjectMemoryWorkspaceId
+  readonly candidateId: string
+}
+
 /** Successful Project Memory Remote operation. */
 export interface ProjectMemorySuccess<T> {
   readonly ok: true
@@ -161,7 +172,7 @@ export interface ProjectMemoryRejected {
 /** Rejected candidate review operation. */
 export interface ProjectMemoryCandidateRejected {
   readonly ok: false
-  readonly error: ProjectMemoryWorkspaceNotFound | ProjectMemoryCandidateNotFound
+  readonly error: ProjectMemoryWorkspaceNotFound | ProjectMemoryCandidateNotFound | ProjectMemoryCandidateConflict
 }
 
 /** Result returned by Project Memory get/setSection/replace. */
