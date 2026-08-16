@@ -44,6 +44,9 @@ function fakeController() {
     source: 'manual'
     sourceRef: null
     createdAt: string
+    reviewHint: null
+    rationale: null
+    relation: 'new'
   }> = []
   const memory = () => Object.values(sections).every(value => value === '') ? null : {
     workspaceId: WORKSPACE_ID,
@@ -88,6 +91,9 @@ function fakeController() {
         source: 'manual',
         sourceRef: null,
         createdAt: '2026-08-15T00:00:01.000Z',
+        reviewHint: null,
+        rationale: null,
+        relation: 'new',
       }]
       return { ok: true, value: { ok: true, value: queue() } }
     },
@@ -172,7 +178,7 @@ describe('ProjectMemoryHeaderAction', () => {
     })
   })
 
-  it('stages a candidate outside committed memory and accepts it explicitly', async () => {
+  it('stages a classified candidate outside committed memory and accepts it explicitly', async () => {
     const { controller, candidateCalls } = fakeController()
     const workspace: ProjectMemoryWorkspace = {
       workspaceId: WORKSPACE_ID,
@@ -187,6 +193,8 @@ describe('ProjectMemoryHeaderAction', () => {
     fireEvent.click(screen.getByRole('button', { name: '加入候选' }))
 
     await screen.findByText('WorkspaceId 作为稳定主键')
+    expect(screen.getByText('新增')).toBeTruthy()
+    expect(screen.getByText('当前分类还没有正式内容；采纳后会作为首条记忆加入。')).toBeTruthy()
     expect((screen.getByLabelText('决策') as HTMLTextAreaElement).value).toBe('')
     fireEvent.click(screen.getByRole('button', { name: '采纳' }))
 
