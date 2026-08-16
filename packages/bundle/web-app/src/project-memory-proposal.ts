@@ -13,7 +13,10 @@ import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import { renderProjectMemoryContext } from '@deepseek-ai/dsh-workspace/project-memory'
+import {
+  PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET,
+  renderProjectMemoryContext,
+} from '@deepseek-ai/dsh-workspace/project-memory'
 import type {
   ProjectMemoryCandidateReviewHint,
   ProjectMemoryCandidateSource,
@@ -426,10 +429,12 @@ function proposalTool(
       if (args.relationship === 'additive') {
         const projected = additiveProjection(currentSection, text)
         if (currentMemory === undefined) {
-          if (projected.length > 4_000) return skipped('skipped-section-full', args.section)
+          if (projected.length > PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET) {
+            return skipped('skipped-section-full', args.section)
+          }
         } else if (!sectionIsFullyVisible(currentMemory, args.section, projected)) {
           return skipped(
-            currentFullyVisible ? 'consolidation-required' : 'skipped-consolidation-source-truncated',
+            currentFullyVisible ? 'consolidation-required' : 'skipped-section-full',
             args.section,
           )
         }
