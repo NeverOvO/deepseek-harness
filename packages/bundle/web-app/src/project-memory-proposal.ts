@@ -6,15 +6,16 @@
  * sole path from a model suggestion into committed memory.
  */
 
+import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-workspace/project-memory'
 import type {
-  ProjectMemoryCandidateReviewHint, ProjectMemorySection,
+  ProjectMemoryCandidateReviewHint, ProjectMemoryCandidateSource, ProjectMemorySection,
 } from '@deepseek-ai/dsh-workspace/project-memory-types'
 
 /** Stable model-facing tool name. */
@@ -41,6 +42,13 @@ const SENSITIVE_PATTERNS = [
 ] as const
 
 const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Before concluding each turn or marking a goal/mission complete, perform one final Project Memory check and stage any qualifying facts before the final response or completion action. Classify the candidate relationship as additive, supersedes, or conflicts relative to remembered Project Memory, and give a short rationale when useful. This relationship is only an advisory review hint: it never authorizes replacing committed memory. Do not stage transient progress, temporary observations, unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
+
+const AUTOMATIC_REVIEW_PROMPT = `Internal Project Memory lifecycle review. Inspect the work completed in the turn that is about to close. If it established any NEW durable project-wide fact that should guide future sessions, call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` once per qualifying fact using the correct section and relationship. Do not propose transient progress, one-off task details, guesses, secrets, credentials, personal data, or facts already present in remembered Project Memory. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
+
+const AUTOMATIC_MISSION_REVIEW_PROMPT = `Internal Project Memory mission-completion review. A goal/mission completed during the turn that is about to close. Inspect the completed mission for NEW durable project-wide facts that should guide future sessions, especially stable decisions, architecture, conventions, repeatable commands, durable known issues, and definition-of-done criteria. Call \`${PROJECT_MEMORY_PROPOSE_TOOL}\` once per qualifying fact using the correct section and relationship. Do not propose transient progress, one-off task details, guesses, secrets, credentials, personal data, or facts already present in remembered Project Memory. This is an internal review step: do not repeat or revise the user-facing answer and do not add user-facing commentary. If nothing qualifies, make no tool call and finish.`
+
+type AutomaticReviewSource = Extract<ProjectMemoryCandidateSource, 'session' | 'mission'>
+type SteerMessage = Parameters<Agent['steer']>[0]
 
 /** Resolve only already-registered Workspace ownership; never create one as a tool side effect. */
 function workspaceForSession(
@@ -70,7 +78,12 @@ function reviewHintFor(
  * Build one proposal tool bound to an already resolved Workspace and Session.
  * The binding is closure-owned rather than model input, preventing cross-workspace writes.
  */
-function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string) {
+function proposalTool(
+  ctx: Context,
+  workspaceId: WorkspaceId,
+  sessionId: string,
+  source: () => ProjectMemoryCandidateSource = () => 'automatic',
+) {
   return defineTool({
     name: PROJECT_MEMORY_PROPOSE_TOOL,
     description:
@@ -137,7 +150,7 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
         workspaceId,
         args.section,
         text,
-        'automatic',
+        source(),
         sessionId,
         reviewHintFor(args.relationship),
         rationale,
@@ -149,6 +162,107 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
       }
     },
   })
+}
+
+/** Whether one open turn already staged Project Memory through the model-facing tool. */
+function turnHasProposalCall(agent: Agent, turn: number): boolean {
+  return agent.session.events.some(event => event.type === 'tool/call'
+    && event.data.turn === turn
+    && event.data.name === PROJECT_MEMORY_PROPOSE_TOOL)
+}
+
+/** Whether one open turn has any model output worth reviewing before it closes. */
+function turnHasAssistantMessage(agent: Agent, turn: number): boolean {
+  return agent.session.events.some(event => event.type === 'assistant/message' && event.data.turn === turn)
+}
+
+/**
+ * Detect a completed Goal/Mission without importing the Goal host package into
+ * this bundle. Goal's durable `goal/change` payload is intentionally inspected
+ * structurally, bounded to the current open turn.
+ */
+function turnCompletedMission(agent: Agent, turn: number): boolean {
+  const events = agent.session.events
+  let start = -1
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type === 'turn/start' && event.data.turn === turn) {
+      start = index
+      break
+    }
+  }
+  if (start < 0) return false
+  for (const event of events.slice(start + 1)) {
+    const structural = event as unknown as { readonly type: string; readonly data: unknown }
+    if (structural.type !== 'goal/change'
+      || structural.data === null
+      || typeof structural.data !== 'object') continue
+    const data = structural.data as { readonly operation?: unknown }
+    if (data.operation === 'complete') return true
+  }
+  return false
+}
+
+/** Decide whether lifecycle enforcement owes this turn one automatic review. */
+function automaticReviewSource(agent: Agent, turn: number): AutomaticReviewSource | undefined {
+  if (turnHasProposalCall(agent, turn) || !turnHasAssistantMessage(agent, turn)) return undefined
+  return turnCompletedMission(agent, turn) ? 'mission' : 'session'
+}
+
+/** Build a plugin-notice steering message without adding a new runtime package edge. */
+function automaticReviewMessage(source: AutomaticReviewSource): SteerMessage {
+  const mission = source === 'mission'
+  return {
+    id: randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text: mission ? AUTOMATIC_MISSION_REVIEW_PROMPT : AUTOMATIC_REVIEW_PROMPT }],
+    source: {
+      kind: 'plugin',
+      plugin: 'web-app',
+      form: 'notice',
+      summary: mission ? 'Project Memory mission review' : 'Project Memory turn review',
+    },
+  } as unknown as SteerMessage
+}
+
+/**
+ * Enforce one final model-side memory check at the true turn stop boundary.
+ * The first stopping pass may steer exactly once; the second pass closes the
+ * same turn and clears the temporary source tag, preventing recursive reviews.
+ */
+function installAutomaticReviewTrigger(
+  ctx: Context,
+  candidateSources: Map<string, ProjectMemoryCandidateSource>,
+): void {
+  const reviewedTurns = new WeakMap<Agent, number>()
+
+  ctx.on('agent/turn-stopping', ({ agent, turn }) => {
+    const workspace = workspaceForSession(ctx, agent.id, agent.session.header.cwd)
+    if (workspace === undefined) return
+
+    if (reviewedTurns.get(agent) === turn) {
+      candidateSources.delete(agent.id)
+      return
+    }
+    reviewedTurns.set(agent, turn)
+
+    const source = automaticReviewSource(agent, turn)
+    if (source === undefined) return
+    candidateSources.set(agent.id, source)
+    try {
+      agent.steer(automaticReviewMessage(source))
+    } catch (error: unknown) {
+      candidateSources.delete(agent.id)
+      ctx.logger.warn(
+        `Project Memory automatic ${source} review could not steer agent '${agent.id}': ${String(error)}`,
+      )
+    }
+  })
+
+  ctx.on('session/event', (session, event) => {
+    if (event.type === 'turn/end') candidateSources.delete(session.id)
+  })
+  ctx.on('agent/disposed', ({ agent }) => { candidateSources.delete(agent.id) })
 }
 
 /**
@@ -187,6 +301,9 @@ export const internals = Object.freeze({
   proposalTool,
   proposalPolicy: PROPOSAL_POLICY,
   installCandidateChangeBridge,
+  installAutomaticReviewTrigger,
+  automaticReviewSource,
+  automaticReviewMessage,
   containsSensitiveText,
   reviewHintFor,
 })
@@ -201,11 +318,18 @@ export const internals = Object.freeze({
  */
 export function installProjectMemoryProposalTool(ctx: Context): void {
   ctx.inject(['workspaceRegistry', 'projectMemory'], (memoryCtx) => {
+    const candidateSources = new Map<string, ProjectMemoryCandidateSource>()
     installCandidateChangeBridge(memoryCtx)
+    installAutomaticReviewTrigger(memoryCtx, candidateSources)
     memoryCtx.on('agent/created', ({ agent }) => {
       const workspace = workspaceForSession(memoryCtx, agent.id, agent.session.header.cwd)
       if (workspace === undefined) return
-      agent.ctx.tools.register(proposalTool(memoryCtx, workspace.id, agent.id))
+      agent.ctx.tools.register(proposalTool(
+        memoryCtx,
+        workspace.id,
+        agent.id,
+        () => candidateSources.get(agent.id) ?? 'automatic',
+      ))
       agent.ctx.systemPrompt.section({
         name: 'yanami:project-memory-proposal-policy',
         order: 98,
