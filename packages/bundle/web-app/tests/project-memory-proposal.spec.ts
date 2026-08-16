@@ -78,6 +78,7 @@ describe('Project Memory proposal safety boundary', () => {
     expect(message.content[0]?.text).toContain('mission-completion')
     expect(message.content[0]?.text).toContain('at most two')
     expect(message.content[0]?.text).toContain('low confidence is discarded')
+    expect(message.content[0]?.text).toContain('supersedesText')
   })
 
   it('does not expose workspace identity or commit operations to the model', async () => {
@@ -89,6 +90,7 @@ describe('Project Memory proposal safety boundary', () => {
       sourceRef: string,
       reviewHint: string,
       rationale: string | null,
+      supersedesText: string | null,
     ) => ({
       id: 'candidate-1',
       workspaceId,
@@ -97,6 +99,7 @@ describe('Project Memory proposal safety boundary', () => {
       source,
       sourceRef,
       reviewHint,
+      supersedesText,
       rationale,
       relation: 'new',
       createdAt: '2026-08-15T00:00:00.000Z',
@@ -111,7 +114,7 @@ describe('Project Memory proposal safety boundary', () => {
     const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
     expect(tool.name).toBe(PROJECT_MEMORY_PROPOSE_TOOL)
     expect(Object.keys((tool.parameters as { properties: Record<string, unknown> }).properties).sort())
-      .toEqual(['confidence', 'durability', 'rationale', 'relationship', 'section', 'text'])
+      .toEqual(['confidence', 'durability', 'rationale', 'relationship', 'section', 'supersedesText', 'text'])
     expect(JSON.stringify(tool.parameters)).not.toContain('workspaceId')
     expect(tool.description).toContain('human review')
     expect(tool.description).toContain('never commits or replaces Project Memory')
@@ -119,6 +122,7 @@ describe('Project Memory proposal safety boundary', () => {
     expect(internals.proposalPolicy).toContain('low-confidence and task-local proposals')
     expect(internals.proposalPolicy).toContain('near-duplicate pending candidates')
     expect(internals.proposalPolicy).toContain('secrets, credentials, personal data')
+    expect(internals.proposalPolicy).toContain('supersedesText')
     expect(internals.proposalPolicy).toContain('pending human review')
     expect(internals.reviewHintFor('additive')).toBe('append')
     expect(internals.reviewHintFor('supersedes')).toBe('supersedes')
@@ -128,6 +132,7 @@ describe('Project Memory proposal safety boundary', () => {
       section: 'decisions',
       text: 'WorkspaceId is the durable project key.',
       relationship: 'supersedes',
+      supersedesText: 'Project path is the durable project key.',
       confidence: 'high',
       durability: 'project-wide',
       rationale: 'This decision replaces an older path-key assumption.',
@@ -144,6 +149,7 @@ describe('Project Memory proposal safety boundary', () => {
       'session-1',
       'supersedes',
       '[confidence: high] This decision replaces an older path-key assumption.',
+      'Project path is the durable project key.',
     )
 
     const missionTool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1', () => 'mission')
@@ -162,7 +168,36 @@ describe('Project Memory proposal safety boundary', () => {
       'session-1',
       'append',
       '[confidence: medium]',
+      null,
     )
+  })
+
+  it('requires supersedesText only for supersede proposals', async () => {
+    const proposeCandidate = vi.fn()
+    const ctx = new Context()
+    ctx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => [],
+      get: () => undefined,
+    } as never)
+    const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
+
+    await expect(tool.execute({
+      section: 'decisions',
+      text: 'Use WorkspaceId as the durable key.',
+      relationship: 'supersedes',
+      ...durableArgs,
+    }, {} as never)).rejects.toThrow(/require exact supersedesText/)
+
+    await expect(tool.execute({
+      section: 'decisions',
+      text: 'Use WorkspaceId as the durable key.',
+      relationship: 'additive',
+      supersedesText: 'Use paths as the durable key.',
+      ...durableArgs,
+    }, {} as never)).rejects.toThrow(/only valid when relationship is supersedes/)
+
+    expect(proposeCandidate).not.toHaveBeenCalled()
   })
 
   it('filters low-confidence, task-local, and status-only facts before persistence', async () => {
@@ -249,6 +284,7 @@ describe('Project Memory proposal safety boundary', () => {
       sourceRef: 'session-old',
       createdAt: '2026-08-15T00:00:00.000Z',
       reviewHint: 'append',
+      supersedesText: null,
       rationale: null,
       relation: 'new',
     }]
@@ -280,15 +316,27 @@ describe('Project Memory proposal safety boundary', () => {
     expect(proposeCandidate).not.toHaveBeenCalled()
   })
 
-  it('stops automatic additive growth at section and review-queue budgets', async () => {
-    const proposeCandidate = vi.fn()
+  it('stops automatic additive growth at section and review-queue budgets without blocking supersede review', async () => {
+    const proposeCandidate = vi.fn(async (...args: unknown[]) => ({
+      id: 'candidate-supersede',
+      workspaceId: args[0],
+      section: args[1],
+      text: args[2],
+      source: args[3],
+      sourceRef: args[4],
+      reviewHint: args[5],
+      rationale: args[6],
+      supersedesText: args[7],
+      relation: 'supersedes',
+      createdAt: '2026-08-15T00:00:00.000Z',
+    }))
     const fullSectionCtx = new Context()
     fullSectionCtx.provide('projectMemory', {
       proposeCandidate,
       candidates: () => [],
       get: () => ({
         sections: {
-          architecture: '', commands: '', conventions: '', decisions: 'x'.repeat(11_995),
+          architecture: '', commands: '', conventions: '', decisions: `Old durable fact.\n${'x'.repeat(11_995)}`,
           knownIssues: '', definitionOfDone: '',
         },
       }),
@@ -302,6 +350,17 @@ describe('Project Memory proposal safety boundary', () => {
     }, {} as never)).resolves.toEqual({
       section: 'decisions',
       status: 'skipped-section-full',
+    })
+    await expect(fullSectionTool.execute({
+      section: 'decisions',
+      text: 'New durable fact.',
+      relationship: 'supersedes',
+      supersedesText: 'Old durable fact.',
+      ...durableArgs,
+    }, {} as never)).resolves.toEqual({
+      candidateId: 'candidate-supersede',
+      section: 'decisions',
+      status: 'pending-review',
     })
 
     const perSectionCtx = new Context()
@@ -347,10 +406,9 @@ describe('Project Memory proposal safety boundary', () => {
       section: 'knownIssues',
       status: 'skipped-queue-full',
     })
-    expect(proposeCandidate).not.toHaveBeenCalled()
   })
 
-  it('rejects empty, oversized, and credential-bearing candidate text or rationale before persistence', async () => {
+  it('rejects empty, oversized, and credential-bearing candidate text, target, or rationale before persistence', async () => {
     const proposeCandidate = vi.fn()
     const ctx = new Context()
     ctx.provide('projectMemory', {
@@ -367,6 +425,9 @@ describe('Project Memory proposal safety boundary', () => {
       section: 'commands', text: 'x'.repeat(8_001), relationship: 'additive', ...durableArgs,
     }, {} as never)).rejects.toThrow(/exceeds 8000 characters/)
     await expect(tool.execute({
+      section: 'commands', text: 'pnpm run build', relationship: 'supersedes', supersedesText: 'x'.repeat(8_001), ...durableArgs,
+    }, {} as never)).rejects.toThrow(/supersedesText exceeds 8000 characters/)
+    await expect(tool.execute({
       section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'x'.repeat(2_001), ...durableArgs,
     }, {} as never)).rejects.toThrow(/rationale exceeds 2000 characters/)
     await expect(tool.execute({
@@ -374,6 +435,9 @@ describe('Project Memory proposal safety boundary', () => {
     }, {} as never)).rejects.toThrow(/after confidence metadata/)
     await expect(tool.execute({
       section: 'commands', text: 'API_KEY=sk-proj-abcdefghijklmnopqrstuv', relationship: 'additive', ...durableArgs,
+    }, {} as never)).rejects.toThrow(/credential or secret/)
+    await expect(tool.execute({
+      section: 'commands', text: 'pnpm run build', relationship: 'supersedes', supersedesText: 'token: abcdefghijklmnop', ...durableArgs,
     }, {} as never)).rejects.toThrow(/credential or secret/)
     await expect(tool.execute({
       section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'token: abcdefghijklmnop', ...durableArgs,
@@ -396,6 +460,7 @@ describe('Project Memory proposal safety boundary', () => {
         source: 'session',
         sourceRef: 'session-old',
         reviewHint: null,
+        supersedesText: null,
         rationale: null,
         relation: 'new',
         createdAt: '2026-08-15T00:00:00.000Z',
