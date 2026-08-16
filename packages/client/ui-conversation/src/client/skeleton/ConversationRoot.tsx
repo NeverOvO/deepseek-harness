@@ -43,10 +43,10 @@ export function ConversationRoot({
   const pickerAnchor = useRef<HTMLButtonElement>(null)
 
   const chooseMode = useCallback((mode: YanamiMode): void => {
-    if (yanamiMode?.available !== true
+    if (yanamiMode?.available === false
       || switchYanamiMode === undefined
       || switchingMode !== undefined
-      || yanamiMode.mode === mode) return
+      || yanamiMode?.mode === mode) return
     setSwitchingMode(mode)
     setModeError(undefined)
     void switchYanamiMode(mode).then((matched) => {
@@ -193,7 +193,7 @@ export function ConversationRoot({
           {...yanamiMode?.available !== true ? {} : { activeMode: yanamiMode.mode }}
           {...switchingMode === undefined ? {} : { switchingMode }}
           {...modeError === undefined ? {} : { modeError }}
-          {...yanamiMode?.available !== true || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
+          {...yanamiMode?.available === false || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
           {...goal === undefined ? {} : { mission: goal }}
         />
       )}
