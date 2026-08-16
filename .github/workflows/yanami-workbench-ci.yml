@@ -93,6 +93,12 @@ jobs:
       - name: Install immutable workspace
         run: pnpm install --frozen-lockfile
 
+      # Workspace package exports resolve to built lib/ entrypoints. Build before
+      # package-level Vitest so source tests exercise the same package graph used
+      # by the shipped Workbench rather than depending on stale local lib/ output.
+      - name: Build repository
+        run: pnpm run build
+
       - name: Test Yanami Workbench surfaces
         run: >-
           pnpm exec vitest run
@@ -106,9 +112,6 @@ jobs:
           packages/client/ui-workspace/tests/project-memory-consolidation-header.client.spec.tsx
           packages/client/ui-conversation/tests/yanami-home.client.spec.tsx
           packages/plan/plan-mode/tests
-
-      - name: Build repository
-        run: pnpm run build
 
       - name: Verify package constraints
         run: pnpm run constraints
