@@ -43,11 +43,10 @@ const NS = 'workspace'
 
 /**
  * Required services (cordis fiber inject). Sidebar/picker seats may arrive in
- * either order, so those surfaces still follow declaration lifetimes through
- * `slots.inject()`. The Project Memory header contribution additionally waits
- * for the conversation service below: that service is mounted only after the
- * real session-header/action declaration has been registered, matching the
- * lifecycle used by the other production header actions.
+ * either order, so those surfaces follow declaration lifetimes through
+ * `slots.inject()`. Project Memory is guarded twice below: first by the real
+ * conversation service lifetime, then by the current header-action declaration
+ * lifetime. This covers startup-order changes and conversation/header HMR.
  */
 export const inject = ['slots', 'sessions', 'workspaces', 'projectMemories', 'locale']
 
@@ -111,23 +110,25 @@ export function apply(ctx: ClientContext): void {
     hooks: { directoryFlow: pickerFlowSource },
   })
 
-  // Production session-header entries must share the conversation fiber's
-  // lifetime. Waiting for the `conversation` service is stronger than merely
-  // observing a transient child declaration: ui-conversation mounts that
-  // service only after `conversation.session.header` has declared its action
-  // row. On conversation teardown/reload this nested scope is disposed and
-  // recreated with the new header declaration, so the Project Memory entry
-  // cannot be stranded on an old declaration epoch.
+  // Dual lifecycle guard for the production session-header contribution:
+  // 1) wait for ui-conversation's service, which is provided only after its
+  //    real header tree has been assembled for that plugin epoch;
+  // 2) within that conversation epoch, follow the actual action-row
+  //    declaration so late declaration, teardown, or HMR recreates this entry
+  //    against the current Slot declaration rather than stranding it on an old
+  //    one. The Project Memory controller remains lazy until the user opens it.
   ctx.inject(['slots', 'conversation', 'projectMemories'], (scope: ClientContext) => (
-    scope.slots.register({
-      name: 'conversation.session.header.actions',
-      id: 'project-memory',
-      order: 30,
-      locale: NS,
-      inject: (): ProjectMemoryHeaderInjected => ({
-        controllerFor: workspaceId => scope.projectMemories.forWorkspace(workspaceId),
-      }),
-    }, ProjectMemoryHeaderAction)
+    scope.slots.inject('conversation.session.header.actions', () => (
+      scope.slots.register({
+        name: 'conversation.session.header.actions',
+        id: 'project-memory',
+        order: 30,
+        locale: NS,
+        inject: (): ProjectMemoryHeaderInjected => ({
+          controllerFor: workspaceId => scope.projectMemories.forWorkspace(workspaceId),
+        }),
+      }, ProjectMemoryHeaderAction)
+    ))
   ))
 
   // Each registration declares its directory-flow child in the same call;
