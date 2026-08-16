@@ -28,20 +28,24 @@ function memory(workspaceId: ReturnType<typeof WorkspaceId>): ProjectMemory {
   }
 }
 
+function memoryContextHarness(path = '/projects/one') {
+  const ctx = new Context()
+  const id = WorkspaceId(`workspace-${path.replaceAll('/', '-')}`)
+  const workspace = { id, path, title: 'one', sessionIds: [] }
+  const get = vi.fn((workspaceId: typeof id) => workspaceId === id ? memory(id) : undefined)
+  ctx.provide('workspaceRegistry', {
+    list: () => [workspace],
+    resolveByPath: vi.fn(),
+  } as never)
+  ctx.provide('projectMemory', { get } as never)
+  return { ctx, id, workspace, get }
+}
+
 describe('appendProjectMemoryContext', () => {
   it('appends the current workspace memory while preserving existing contexts', async () => {
-    const ctx = new Context()
-    const id = WorkspaceId('workspace-1')
-    const workspace = { id, path: '/projects/one', title: 'one', sessionIds: [] }
-    ctx.provide('workspaceRegistry', {
-      list: () => [workspace],
-      resolveByPath: vi.fn(),
-    } as never)
-    ctx.provide('projectMemory', {
-      get: (workspaceId: typeof id) => workspaceId === id ? memory(id) : undefined,
-    } as never)
+    const { ctx } = memoryContextHarness()
 
-    const result = await appendProjectMemoryContext(ctx, baseAssembly('/projects/one'))
+    const result = await appendProjectMemoryContext(ctx, baseAssembly('/projects/one'), 'standard')
     expect(result.contexts).toEqual([
       { name: 'existing', text: 'existing context' },
       {
@@ -52,14 +56,7 @@ describe('appendProjectMemoryContext', () => {
   })
 
   it('is context-only and preserves the upstream prompt, tool catalog, and model variables', async () => {
-    const ctx = new Context()
-    const id = WorkspaceId('workspace-upstream-contract')
-    const workspace = { id, path: '/projects/upstream', title: 'upstream', sessionIds: [] }
-    ctx.provide('workspaceRegistry', {
-      list: () => [workspace],
-      resolveByPath: vi.fn(),
-    } as never)
-    ctx.provide('projectMemory', { get: () => memory(id) } as never)
+    const { ctx } = memoryContextHarness('/projects/upstream')
 
     const assembly = baseAssembly('/projects/upstream')
     assembly.sections.push({ name: 'upstream:persona', text: 'Original DSH system prompt' })
@@ -69,7 +66,7 @@ describe('appendProjectMemoryContext', () => {
     const tools = assembly.tools
     const variables = assembly.variables
 
-    const result = await appendProjectMemoryContext(ctx, assembly)
+    const result = await appendProjectMemoryContext(ctx, assembly, 'standard')
 
     expect(result.sections).toBe(sections)
     expect(result.tools).toBe(tools)
@@ -78,6 +75,31 @@ describe('appendProjectMemoryContext', () => {
     expect(result.tools).toEqual([{ name: 'upstream_tool' }])
     expect(result.variables).toEqual({ cwd: '/projects/upstream', model: 'deepseek-v4' })
     expect(result.contexts.at(-1)?.name).toBe('yanami:project-memory')
+  })
+
+  it('returns the exact upstream assembly in Minimal without even reading Project Memory', async () => {
+    const { ctx, get } = memoryContextHarness('/projects/minimal')
+    const assembly = baseAssembly('/projects/minimal')
+    assembly.sections.push({ name: 'upstream:minimal-persona', text: 'Exact upstream minimal prompt' })
+    assembly.tools.push({ name: 'bash' } as never, { name: 'str_replace_editor' } as never)
+    assembly.variables.model = 'deepseek-v4'
+
+    await expect(appendProjectMemoryContext(ctx, assembly, 'minimal')).resolves.toBe(assembly)
+    expect(get).not.toHaveBeenCalled()
+    expect(assembly).toEqual({
+      sections: [{ name: 'upstream:minimal-persona', text: 'Exact upstream minimal prompt' }],
+      contexts: [{ name: 'existing', text: 'existing context' }],
+      tools: [{ name: 'bash' }, { name: 'str_replace_editor' }],
+      variables: { cwd: '/projects/minimal', model: 'deepseek-v4' },
+    })
+  })
+
+  it('fails closed for a future upstream preset until Yanami explicitly maps it', async () => {
+    const { ctx, get } = memoryContextHarness('/projects/future')
+    const assembly = baseAssembly('/projects/future')
+
+    await expect(appendProjectMemoryContext(ctx, assembly, 'future-dsh-preset')).resolves.toBe(assembly)
+    expect(get).not.toHaveBeenCalled()
   })
 
   it('canonicalizes cwd only when the fast exact-path lookup misses', async () => {
@@ -91,7 +113,7 @@ describe('appendProjectMemoryContext', () => {
     } as never)
     ctx.provide('projectMemory', { get: () => memory(id) } as never)
 
-    const result = await appendProjectMemoryContext(ctx, baseAssembly('/alias/project'))
+    const result = await appendProjectMemoryContext(ctx, baseAssembly('/alias/project'), 'standard')
     expect(resolveByPath).toHaveBeenCalledWith('/alias/project')
     expect(result.contexts.at(-1)?.name).toBe('yanami:project-memory')
   })
@@ -99,7 +121,7 @@ describe('appendProjectMemoryContext', () => {
   it('leaves the assembly untouched without cwd, services, workspace, or memory', async () => {
     const emptyCtx = new Context()
     const noCwd = baseAssembly()
-    await expect(appendProjectMemoryContext(emptyCtx, noCwd)).resolves.toBe(noCwd)
+    await expect(appendProjectMemoryContext(emptyCtx, noCwd, 'standard')).resolves.toBe(noCwd)
 
     const ctx = new Context()
     ctx.provide('workspaceRegistry', {
@@ -108,6 +130,6 @@ describe('appendProjectMemoryContext', () => {
     } as never)
     ctx.provide('projectMemory', { get: () => undefined } as never)
     const unmatched = baseAssembly('/missing')
-    await expect(appendProjectMemoryContext(ctx, unmatched)).resolves.toBe(unmatched)
+    await expect(appendProjectMemoryContext(ctx, unmatched, 'standard')).resolves.toBe(unmatched)
   })
 })
