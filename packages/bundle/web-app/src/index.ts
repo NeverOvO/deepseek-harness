@@ -22,6 +22,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import { renderProjectMemoryContext } from '@deepseek-ai/dsh-workspace/project-memory'
+import { yanamiHarnessPolicyForAgentPreset } from './harness-mode.ts'
 import { installProjectMemoryProposalTool } from './project-memory-proposal.ts'
 
 /** Stable Cordis plugin name. */
@@ -132,16 +133,21 @@ export const internals: { resolveDistIndex: () => string } = { resolveDistIndex 
 
 /**
  * Append the current workspace's durable Project Memory to one assembled model
- * context. `cwd` is read from the already-resolved prompt variables, avoiding
- * a dependency on the Agent package's AssembleContext augmentation.
+ * context when the upstream preset has explicitly opted into Yanami model input.
+ * `cwd` is read from the already-resolved prompt variables, avoiding a dependency
+ * on the Agent package's AssembleContext augmentation.
  * @param ctx - host context carrying optional Workspace/Project Memory services.
  * @param assembly - post-waterfall assembly to enrich.
- * @returns the original assembly when no current Project Memory applies, otherwise a copied assembly with one context row appended.
+ * @param agentPreset - persisted upstream DSH preset id for the current agent.
+ * @returns the original assembly when no current Project Memory applies or the preset is model-input transparent; otherwise a copied assembly with one context row appended.
  */
 export async function appendProjectMemoryContext(
   ctx: Context,
   assembly: PromptAssembly,
+  agentPreset?: string | null,
 ): Promise<PromptAssembly> {
+  if (!yanamiHarnessPolicyForAgentPreset(agentPreset).projectMemoryContext) return assembly
+
   const cwd = assembly.variables.cwd
   const registry = ctx.get('workspaceRegistry')
   const projectMemory = ctx.get('projectMemory')
@@ -191,9 +197,12 @@ export function apply(ctx: Context, config: Config): void {
         order: -98,
         text: () => webSurfacePrompt(localWebUrl(promptCtx)),
       })
-      promptCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+      promptCtx.on('system-prompt/assemble', async (_assembly, context, next) => {
         const transformed = await next()
-        return await appendProjectMemoryContext(promptCtx, transformed)
+        const agentPreset = (context as {
+          agent?: { session: { header: { agentPreset?: string } } }
+        }).agent?.session.header.agentPreset
+        return await appendProjectMemoryContext(promptCtx, transformed, agentPreset)
       })
     })
     ctx.inject(['shellEnv'], (runtimeCtx) => {
