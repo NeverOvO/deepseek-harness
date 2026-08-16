@@ -6,6 +6,7 @@ on:
       - feat/yanami-workbench-ui
     paths:
       - 'apps/desktop/**'
+      - 'apps/cli/config/agent-presets/**'
       - 'packages/bundle/web-app/**'
       - 'packages/client/ui-conversation/**'
       - 'packages/client/ui-theme/**'
@@ -46,14 +47,13 @@ jobs:
 
       # Yanami is an upper-layer plugin/product shell. The model provider,
       # routing/loop, prompt registry, tool registry, context/compaction core,
-      # and base bundles must remain byte-for-byte upstream-owned. Comparing
-      # trees rather than commit ancestry also forces an explicit DSH sync when
-      # master updates one of these paths.
+      # base bundles, and shipped DSH Agent presets remain upstream-owned.
       - name: Verify Yanami stays above the DSH model core
         shell: bash
         run: |
           git fetch --no-tags --depth=1 origin +master:refs/remotes/origin/master
           protected_paths=(
+            apps/cli/config/agent-presets
             packages/llm
             packages/core/agent
             packages/core/agent-loop
@@ -68,7 +68,7 @@ jobs:
           )
 
           if ! git diff --quiet origin/master HEAD -- "${protected_paths[@]}"; then
-            echo '::error::Yanami must not modify the upstream DSH model/agent core. Sync master and keep Yanami changes in upper-layer plugin seams.'
+            echo '::error::Yanami must not modify the upstream DSH model/agent core or shipped Agent presets. Sync master and keep Yanami changes in upper-layer plugin seams.'
             git diff --name-status origin/master HEAD -- "${protected_paths[@]}"
             exit 1
           fi
@@ -96,6 +96,7 @@ jobs:
         run: >-
           pnpm exec vitest run
           packages/bundle/web-app/tests/harness-mode.spec.ts
+          packages/bundle/web-app/tests/yanami-mode.spec.ts
           packages/bundle/web-app/tests/project-memory-context.spec.ts
           packages/bundle/web-app/tests/project-memory-proposal.spec.ts
           packages/client/ui-conversation/tests/yanami-home.client.spec.tsx
