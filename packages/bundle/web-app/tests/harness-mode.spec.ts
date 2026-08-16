@@ -44,7 +44,7 @@ describe('DSH Harness mode compatibility', () => {
     }
   })
 
-  it('does not steer a Minimal turn at the automatic Project Memory review boundary', () => {
+  it('does not steer a Minimal turn at the automatic Project Memory review boundary', async () => {
     const ctx = new Context()
     ctx.provide('workspaceRegistry', {
       list: () => [{
@@ -68,12 +68,16 @@ describe('DSH Harness mode compatibility', () => {
     } as never
 
     internals.installAutomaticReviewTrigger(ctx, new Map())
-    ctx.emit('agent/turn-stopping', { agent, turn: 1 } as never)
+    await ctx.serial('agent/turn-stopping', {
+      agent,
+      turn: 1,
+      signal: new AbortController().signal,
+    } as never)
 
     expect(steer).not.toHaveBeenCalled()
   })
 
-  it('preserves the existing automatic review behavior in Standard', () => {
+  it('preserves the existing automatic review behavior in Standard', async () => {
     const ctx = new Context()
     ctx.provide('workspaceRegistry', {
       list: () => [{
@@ -97,7 +101,11 @@ describe('DSH Harness mode compatibility', () => {
     } as never
 
     internals.installAutomaticReviewTrigger(ctx, new Map())
-    ctx.emit('agent/turn-stopping', { agent, turn: 1 } as never)
+    await ctx.serial('agent/turn-stopping', {
+      agent,
+      turn: 1,
+      signal: new AbortController().signal,
+    } as never)
 
     expect(steer).toHaveBeenCalledTimes(1)
   })
