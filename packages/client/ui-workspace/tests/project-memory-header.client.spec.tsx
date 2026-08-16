@@ -45,6 +45,7 @@ function fakeController() {
     sourceRef: null
     createdAt: string
     reviewHint: null
+    supersedesText: null
     rationale: null
     relation: 'new'
   }> = []
@@ -92,6 +93,7 @@ function fakeController() {
         sourceRef: null,
         createdAt: '2026-08-15T00:00:01.000Z',
         reviewHint: null,
+        supersedesText: null,
         rationale: null,
         relation: 'new',
       }]
