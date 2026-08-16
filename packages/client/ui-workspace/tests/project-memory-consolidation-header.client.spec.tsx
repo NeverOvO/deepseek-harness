@@ -5,6 +5,8 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ProjectMemoryController,
   type ProjectMemoryRemote,
+  type SessionId,
+  type WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { ProjectMemoryHeaderAction } from '../src/client/project-memory/ProjectMemoryHeaderAction.tsx'
 import type {
@@ -14,6 +16,7 @@ import type {
 import { zh } from '../src/client/locales.ts'
 
 const WORKSPACE_ID = 'workspace-consolidation-ui' as WorkspaceId
+const SESSION_ID = 'session-consolidation-ui' as SessionId
 const BEFORE = 'Decision A preserves the current architecture.  \n\nDecision B preserves the reviewed release rule.\n'
 const AFTER = 'Durable decisions: preserve the current architecture and reviewed release rule.'
 
@@ -83,7 +86,26 @@ function props(controller: ProjectMemoryController): ProjectMemoryHeaderActionPr
     title: 'Yanami Consolidation Test',
   }
   const useProjectWorkspace: ProjectMemoryHeaderActionProps['useProjectWorkspace'] = selector => selector(workspace)
+  const workspaceState: WorkspaceListState = {
+    items: [{
+      workspaceId: WORKSPACE_ID,
+      path: '/projects/yanami-consolidation-test',
+      title: workspace.title,
+      sessionIds: [SESSION_ID],
+      createdAt: '2026-08-16T00:00:00.000Z',
+      updatedAt: '2026-08-16T00:00:00.000Z',
+    }],
+    archivedSessionIds: [],
+    state: 'idle',
+    phase: 'ready',
+    error: null,
+    baselinesReady: true,
+    recentWorkspaceId: WORKSPACE_ID,
+  }
+  const useWorkspaces: ProjectMemoryHeaderActionProps['useWorkspaces'] = selector => selector(workspaceState)
   return {
+    sessionId: SESSION_ID,
+    useWorkspaces,
     useProjectWorkspace,
     controllerFor: () => controller,
     t,
