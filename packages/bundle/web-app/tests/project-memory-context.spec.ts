@@ -51,6 +51,35 @@ describe('appendProjectMemoryContext', () => {
     ])
   })
 
+  it('is context-only and preserves the upstream prompt, tool catalog, and model variables', async () => {
+    const ctx = new Context()
+    const id = WorkspaceId('workspace-upstream-contract')
+    const workspace = { id, path: '/projects/upstream', title: 'upstream', sessionIds: [] }
+    ctx.provide('workspaceRegistry', {
+      list: () => [workspace],
+      resolveByPath: vi.fn(),
+    } as never)
+    ctx.provide('projectMemory', { get: () => memory(id) } as never)
+
+    const assembly = baseAssembly('/projects/upstream')
+    assembly.sections.push({ name: 'upstream:persona', text: 'Original DSH system prompt' })
+    assembly.tools.push({ name: 'upstream_tool' } as never)
+    assembly.variables.model = 'deepseek-v4'
+    const sections = assembly.sections
+    const tools = assembly.tools
+    const variables = assembly.variables
+
+    const result = await appendProjectMemoryContext(ctx, assembly)
+
+    expect(result.sections).toBe(sections)
+    expect(result.tools).toBe(tools)
+    expect(result.variables).toBe(variables)
+    expect(result.sections).toEqual([{ name: 'upstream:persona', text: 'Original DSH system prompt' }])
+    expect(result.tools).toEqual([{ name: 'upstream_tool' }])
+    expect(result.variables).toEqual({ cwd: '/projects/upstream', model: 'deepseek-v4' })
+    expect(result.contexts.at(-1)?.name).toBe('yanami:project-memory')
+  })
+
   it('canonicalizes cwd only when the fast exact-path lookup misses', async () => {
     const ctx = new Context()
     const id = WorkspaceId('workspace-2')

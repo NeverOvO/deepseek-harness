@@ -2,9 +2,10 @@
  * Yanami compatibility policy for the agent presets shipped by DSH.
  *
  * The preset id is persisted on SessionHeader.agentPreset. Yanami consumes
- * that upstream identity rather than inventing a second mode selector. Unknown
- * or custom presets retain the historical Standard-compatible behavior until
- * DSH exposes richer capability metadata for arbitrary presets.
+ * that upstream identity rather than inventing a second mode selector. Exact
+ * shipped preset ids may opt into Yanami model-facing enhancements; unknown or
+ * future preset ids fail closed so an upstream DSH update keeps its native
+ * prompt, tool, and turn-stop behavior until Yanami explicitly reviews it.
  */
 
 /** Product-facing DSH Harness modes. */
@@ -17,8 +18,8 @@ export type DshBuiltInAgentPreset = 'standard' | 'code' | 'minimal' | 'cordis'
  * Model-facing Yanami enhancements allowed for one Harness mode.
  *
  * Host-side Project Memory storage, candidate review, and Workbench UI are
- * deliberately outside this policy: Minimal keeps those host capabilities
- * while Yanami adds nothing to its model-facing two-tool agent composition.
+ * deliberately outside this policy: disabling these switches leaves the DSH
+ * model/agent composition untouched while those host capabilities remain.
  */
 export interface YanamiHarnessPolicy {
   readonly mode: DshHarnessMode
@@ -58,6 +59,19 @@ const CREATIVE_POLICY: YanamiHarnessPolicy = Object.freeze({
   projectMemoryTurnReview: true,
 })
 
+/**
+ * Compatibility fence for custom or newly introduced upstream presets.
+ *
+ * The display mode remains Standard-compatible, but Yanami adds no model-facing
+ * prompt, tool, or lifecycle turn until that preset has been explicitly mapped.
+ */
+const UNMAPPED_UPSTREAM_POLICY: YanamiHarnessPolicy = Object.freeze({
+  mode: 'standard',
+  projectMemoryProposalTool: false,
+  projectMemoryProposalPrompt: false,
+  projectMemoryTurnReview: false,
+})
+
 /** Resolve the official product mode from the persisted built-in preset id. */
 export function harnessModeForAgentPreset(agentPreset: string | null | undefined): DshHarnessMode {
   if (agentPreset === 'code') return 'ptc'
@@ -69,16 +83,16 @@ export function harnessModeForAgentPreset(agentPreset: string | null | undefined
 /**
  * Resolve Yanami model-facing behavior for one DSH Agent preset.
  *
- * `standard`, an absent preset, and custom/unknown preset ids intentionally use
- * the legacy Standard behavior. This is fail-open for compatibility, while the
- * one upstream preset with a strict minimality contract is fail-closed.
+ * The default/absent preset is the shipped Standard composition. Exact known
+ * built-ins keep their reviewed Yanami behavior. Any custom or future upstream
+ * preset is fail-closed so Yanami cannot silently alter a new DSH composition.
  */
 export function yanamiHarnessPolicyForAgentPreset(
   agentPreset: string | null | undefined,
 ): YanamiHarnessPolicy {
-  const mode = harnessModeForAgentPreset(agentPreset)
-  if (mode === 'ptc') return PTC_POLICY
-  if (mode === 'minimal') return MINIMAL_POLICY
-  if (mode === 'creative') return CREATIVE_POLICY
-  return STANDARD_POLICY
+  if (agentPreset === undefined || agentPreset === null || agentPreset === 'standard') return STANDARD_POLICY
+  if (agentPreset === 'code') return PTC_POLICY
+  if (agentPreset === 'minimal') return MINIMAL_POLICY
+  if (agentPreset === 'cordis') return CREATIVE_POLICY
+  return UNMAPPED_UPSTREAM_POLICY
 }

@@ -14,16 +14,22 @@ describe('DSH Harness mode compatibility', () => {
     expect(harnessModeForAgentPreset('cordis')).toBe('creative')
   })
 
-  it('keeps absent and custom presets backward-compatible with Standard behavior', () => {
+  it('keeps the absent preset on Standard while fail-closing unknown upstream presets', () => {
     expect(harnessModeForAgentPreset(undefined)).toBe('standard')
     expect(harnessModeForAgentPreset(null)).toBe('standard')
     expect(harnessModeForAgentPreset('my-team-preset')).toBe('standard')
 
-    expect(yanamiHarnessPolicyForAgentPreset('my-team-preset')).toMatchObject({
+    expect(yanamiHarnessPolicyForAgentPreset(undefined)).toMatchObject({
       mode: 'standard',
       projectMemoryProposalTool: true,
       projectMemoryProposalPrompt: true,
       projectMemoryTurnReview: true,
+    })
+    expect(yanamiHarnessPolicyForAgentPreset('my-team-preset')).toEqual({
+      mode: 'standard',
+      projectMemoryProposalTool: false,
+      projectMemoryProposalPrompt: false,
+      projectMemoryTurnReview: false,
     })
   })
 
@@ -59,6 +65,39 @@ describe('DSH Harness mode compatibility', () => {
       id: 'session-minimal',
       session: {
         header: { cwd: '/projects/one', agentPreset: 'minimal' },
+        events: [
+          { type: 'turn/start', data: { turn: 1 } },
+          { type: 'assistant/message', data: { turn: 1 } },
+        ],
+      },
+      steer,
+    } as never
+
+    internals.installAutomaticReviewTrigger(ctx, new Map())
+    await ctx.serial('agent/turn-stopping', {
+      agent,
+      turn: 1,
+      signal: new AbortController().signal,
+    } as never)
+
+    expect(steer).not.toHaveBeenCalled()
+  })
+
+  it('does not steer a custom or newly introduced upstream preset until explicitly mapped', async () => {
+    const ctx = new Context()
+    ctx.provide('workspaceRegistry', {
+      list: () => [{
+        id: 'workspace-1',
+        path: '/projects/one',
+        sessionIds: ['session-future'],
+      }],
+    } as never)
+
+    const steer = vi.fn()
+    const agent = {
+      id: 'session-future',
+      session: {
+        header: { cwd: '/projects/one', agentPreset: 'future-dsh-preset' },
         events: [
           { type: 'turn/start', data: { turn: 1 } },
           { type: 'assistant/message', data: { turn: 1 } },

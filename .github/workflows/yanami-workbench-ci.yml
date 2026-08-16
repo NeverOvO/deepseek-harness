@@ -6,11 +6,18 @@ on:
       - feat/yanami-workbench-ui
     paths:
       - 'apps/desktop/**'
+      - 'packages/bundle/web-app/**'
       - 'packages/client/ui-conversation/**'
       - 'packages/client/ui-theme/**'
       - 'packages/plan/plan-mode/**'
       - 'packages/goal/**'
       - 'packages/workspace/**'
+      - 'packages/core/**'
+      - 'packages/llm/**'
+      - 'packages/compaction/**'
+      - 'packages/context/**'
+      - 'packages/bundle/base/**'
+      - 'packages/bundle/headless/**'
       - 'pnpm-lock.yaml'
       - 'package.json'
       - 'pnpm-workspace.yaml'
@@ -37,6 +44,44 @@ jobs:
         with:
           persist-credentials: false
 
+      # Yanami is an upper-layer plugin/product shell. The model provider,
+      # routing/loop, prompt registry, tool registry, context/compaction core,
+      # and base bundles must remain byte-for-byte upstream-owned. Comparing
+      # trees rather than commit ancestry also forces an explicit DSH sync when
+      # master updates one of these paths.
+      - name: Verify Yanami stays above the DSH model core
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 origin +master:refs/remotes/origin/master
+          protected_paths=(
+            packages/llm
+            packages/core/agent
+            packages/core/agent-loop
+            packages/core/agent-default-model
+            packages/core/agent-tool-presentation
+            packages/core/system-prompt
+            packages/core/tools
+            packages/compaction
+            packages/context
+            packages/bundle/base
+            packages/bundle/headless
+          )
+
+          if ! git diff --quiet origin/master HEAD -- "${protected_paths[@]}"; then
+            echo '::error::Yanami must not modify the upstream DSH model/agent core. Sync master and keep Yanami changes in upper-layer plugin seams.'
+            git diff --name-status origin/master HEAD -- "${protected_paths[@]}"
+            exit 1
+          fi
+
+          if grep -Eq '^[[:space:]]*-[[:space:]]+id:[[:space:]]+agent-default-model([[:space:]]|$)' packages/bundle/web-app/cordis.patch.yml; then
+            echo '::error::Yanami web overlay must not override the upstream agent-default-model row.'
+            exit 1
+          fi
+          if grep -q '@deepseek-ai/dsh-llm-deepseek' packages/bundle/web-app/cordis.patch.yml; then
+            echo '::error::Yanami web overlay must not mount or replace the DeepSeek provider directly.'
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v6
@@ -50,6 +95,9 @@ jobs:
       - name: Test Yanami Workbench surfaces
         run: >-
           pnpm exec vitest run
+          packages/bundle/web-app/tests/harness-mode.spec.ts
+          packages/bundle/web-app/tests/project-memory-context.spec.ts
+          packages/bundle/web-app/tests/project-memory-proposal.spec.ts
           packages/client/ui-conversation/tests/yanami-home.client.spec.tsx
           packages/plan/plan-mode/tests
 
