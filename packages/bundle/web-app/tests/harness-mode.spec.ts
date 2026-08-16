@@ -21,21 +21,24 @@ describe('DSH Harness mode compatibility', () => {
 
     expect(yanamiHarnessPolicyForAgentPreset(undefined)).toMatchObject({
       mode: 'standard',
+      projectMemoryContext: true,
       projectMemoryProposalTool: true,
       projectMemoryProposalPrompt: true,
       projectMemoryTurnReview: true,
     })
     expect(yanamiHarnessPolicyForAgentPreset('my-team-preset')).toEqual({
       mode: 'standard',
+      projectMemoryContext: false,
       projectMemoryProposalTool: false,
       projectMemoryProposalPrompt: false,
       projectMemoryTurnReview: false,
     })
   })
 
-  it('adds no Project Memory model surface or per-turn model call in Minimal', () => {
+  it('adds no Project Memory model input, tool surface, or per-turn model call in Minimal', () => {
     expect(yanamiHarnessPolicyForAgentPreset('minimal')).toEqual({
       mode: 'minimal',
+      projectMemoryContext: false,
       projectMemoryProposalTool: false,
       projectMemoryProposalPrompt: false,
       projectMemoryTurnReview: false,
@@ -43,6 +46,7 @@ describe('DSH Harness mode compatibility', () => {
 
     for (const preset of ['standard', 'code', 'cordis'] as const) {
       expect(yanamiHarnessPolicyForAgentPreset(preset)).toMatchObject({
+        projectMemoryContext: true,
         projectMemoryProposalTool: true,
         projectMemoryProposalPrompt: true,
         projectMemoryTurnReview: true,
