@@ -20,6 +20,7 @@ import type {
   ProjectMemoryCandidateView,
   ProjectMemorySection,
 } from '@deepseek-ai/dsh-workspace/project-memory-types'
+import { yanamiHarnessPolicyForAgentPreset } from './harness-mode.ts'
 
 /** Stable model-facing tool name. */
 export const PROJECT_MEMORY_PROPOSE_TOOL = 'project_memory_propose'
@@ -421,6 +422,12 @@ function installAutomaticReviewTrigger(
   const reviewedTurns = new WeakMap<Agent, number>()
 
   ctx.on('agent/turn-stopping', ({ agent, turn }) => {
+    const harnessPolicy = yanamiHarnessPolicyForAgentPreset(agent.session.header.agentPreset)
+    if (!harnessPolicy.projectMemoryTurnReview) {
+      candidateSources.delete(agent.id)
+      return
+    }
+
     const workspace = workspaceForSession(ctx, agent.id, agent.session.header.cwd)
     if (workspace === undefined) return
 
@@ -513,17 +520,23 @@ export function installProjectMemoryProposalTool(ctx: Context): void {
     memoryCtx.on('agent/created', ({ agent }) => {
       const workspace = workspaceForSession(memoryCtx, agent.id, agent.session.header.cwd)
       if (workspace === undefined) return
-      agent.ctx.tools.register(proposalTool(
-        memoryCtx,
-        workspace.id,
-        agent.id,
-        () => candidateSources.get(agent.id) ?? 'automatic',
-      ))
-      agent.ctx.systemPrompt.section({
-        name: 'yanami:project-memory-proposal-policy',
-        order: 98,
-        text: PROPOSAL_POLICY,
-      })
+
+      const harnessPolicy = yanamiHarnessPolicyForAgentPreset(agent.session.header.agentPreset)
+      if (harnessPolicy.projectMemoryProposalTool) {
+        agent.ctx.tools.register(proposalTool(
+          memoryCtx,
+          workspace.id,
+          agent.id,
+          () => candidateSources.get(agent.id) ?? 'automatic',
+        ))
+      }
+      if (harnessPolicy.projectMemoryProposalPrompt) {
+        agent.ctx.systemPrompt.section({
+          name: 'yanami:project-memory-proposal-policy',
+          order: 98,
+          text: PROPOSAL_POLICY,
+        })
+      }
     })
   })
 }
