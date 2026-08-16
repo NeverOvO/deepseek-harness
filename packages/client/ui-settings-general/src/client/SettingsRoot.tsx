@@ -11,10 +11,9 @@
  * to the step, so a mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
-  IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
+  BodyPortal, IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
   IconPersonalizationOutline16, IconSettingsOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
@@ -44,8 +43,8 @@ type PanelProps = {
  * The settings trigger lives inside the sidebar. Rendering the overlay in the
  * same DOM subtree allows a transformed/contained sidebar ancestor to become
  * the containing block for `position: fixed`, which collapses the dialog into
- * sidebar width. Portal the overlay to document.body so viewport geometry and
- * stacking are independent from sidebar layout.
+ * sidebar width. BodyPortal keeps viewport geometry and stacking independent
+ * from sidebar layout without making this feature own react-dom directly.
  */
 function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
@@ -65,42 +64,44 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   const closeButton = useRef<HTMLButtonElement | null>(null)
   useEffect(() => { closeButton.current?.focus() }, [])
 
-  return createPortal((
-    <div className={css.overlay} role="presentation">
-      <div className={css.mask} aria-hidden="true" onClick={onClose} />
-      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <nav className={css.nav}>
-          <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
-          <div className={css.navList}>
-            {rows.map(row => (
-              <button
-                key={row.id}
-                type="button"
-                className={clsx(css.navCell, row.id === active && css.active)}
-                aria-current={row.id === active ? 'true' : undefined}
-                onClick={() => { onSelect(row.id) }}
-              >
-                {navIcon(row.id)}
-                <span className={css.navLabel}>{row.label}</span>
+  return (
+    <BodyPortal>
+      <div className={css.overlay} role="presentation">
+        <div className={css.mask} aria-hidden="true" onClick={onClose} />
+        <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+          <nav className={css.nav}>
+            <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
+            <div className={css.navList}>
+              {rows.map(row => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className={clsx(css.navCell, row.id === active && css.active)}
+                  aria-current={row.id === active ? 'true' : undefined}
+                  onClick={() => { onSelect(row.id) }}
+                >
+                  {navIcon(row.id)}
+                  <span className={css.navLabel}>{row.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+          <div className={css.content}>
+            <div className={css.header}>
+              <div className={css.actions}>{renderSlot('settings.action', {})}</div>
+              <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
+                <IconCloseOutline16 size={14} />
+                <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
               </button>
-            ))}
-          </div>
-        </nav>
-        <div className={css.content}>
-          <div className={css.header}>
-            <div className={css.actions}>{renderSlot('settings.action', {})}</div>
-            <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
-              <IconCloseOutline16 size={14} />
-              <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
-            </button>
-          </div>
-          <div className={css.options}>
-            {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
+            </div>
+            <div className={css.options}>
+              {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  ), document.body)
+    </BodyPortal>
+  )
 }
 
 /**
