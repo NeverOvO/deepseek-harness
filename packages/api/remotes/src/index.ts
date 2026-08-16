@@ -13,7 +13,12 @@ import type {} from '@deepseek-ai/dsh-credentials/types'
 import type {} from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import type {} from '@deepseek-ai/dsh-settings/types'
-import type {} from '@deepseek-ai/dsh-workspace/project-memory-types'
+// Keep this one as a real side-effect import rather than `import type {}`:
+// api-remotes' emitted Host declaration is consumed through a project reference
+// by apiproxy, and the forwarded-event `ctx.on(...)` loop must still see the
+// owner's Cordis Events augmentation after declaration emit. The target module
+// is browser-safe/type-only at source, so its runtime artifact has no behavior.
+import '@deepseek-ai/dsh-workspace/project-memory-types'
 
 export {
   ApiRemoteSessionNotFound,
