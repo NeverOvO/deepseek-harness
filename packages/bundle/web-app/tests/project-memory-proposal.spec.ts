@@ -14,6 +14,11 @@ const workspace = {
   updatedAt: '2026-08-15T00:00:00.000Z',
 }
 
+const durableArgs = {
+  confidence: 'high' as const,
+  durability: 'project-wide' as const,
+}
+
 describe('Project Memory proposal safety boundary', () => {
   it('resolves only an already-registered Workspace by attachment or exact cwd', () => {
     const ctx = new Context()
@@ -71,6 +76,8 @@ describe('Project Memory proposal safety boundary', () => {
     expect(message.source).toMatchObject({ kind: 'plugin', form: 'notice', summary: 'Project Memory mission review' })
     expect(message.content[0]?.text).toContain(PROJECT_MEMORY_PROPOSE_TOOL)
     expect(message.content[0]?.text).toContain('mission-completion')
+    expect(message.content[0]?.text).toContain('at most two')
+    expect(message.content[0]?.text).toContain('low confidence is discarded')
   })
 
   it('does not expose workspace identity or commit operations to the model', async () => {
@@ -95,17 +102,22 @@ describe('Project Memory proposal safety boundary', () => {
       createdAt: '2026-08-15T00:00:00.000Z',
     }))
     const ctx = new Context()
-    ctx.provide('projectMemory', { proposeCandidate, candidates: () => [] } as never)
+    ctx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => [],
+      get: () => undefined,
+    } as never)
 
     const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
     expect(tool.name).toBe(PROJECT_MEMORY_PROPOSE_TOOL)
     expect(Object.keys((tool.parameters as { properties: Record<string, unknown> }).properties).sort())
-      .toEqual(['rationale', 'relationship', 'section', 'text'])
+      .toEqual(['confidence', 'durability', 'rationale', 'relationship', 'section', 'text'])
     expect(JSON.stringify(tool.parameters)).not.toContain('workspaceId')
     expect(tool.description).toContain('human review')
     expect(tool.description).toContain('never commits or replaces Project Memory')
     expect(internals.proposalPolicy).toContain('NEW durable project-wide fact')
-    expect(internals.proposalPolicy).toContain('advisory review hint')
+    expect(internals.proposalPolicy).toContain('low-confidence and task-local proposals')
+    expect(internals.proposalPolicy).toContain('near-duplicate pending candidates')
     expect(internals.proposalPolicy).toContain('secrets, credentials, personal data')
     expect(internals.proposalPolicy).toContain('pending human review')
     expect(internals.reviewHintFor('additive')).toBe('append')
@@ -116,6 +128,8 @@ describe('Project Memory proposal safety boundary', () => {
       section: 'decisions',
       text: 'WorkspaceId is the durable project key.',
       relationship: 'supersedes',
+      confidence: 'high',
+      durability: 'project-wide',
       rationale: 'This decision replaces an older path-key assumption.',
     }, {} as never)).resolves.toEqual({
       candidateId: 'candidate-1',
@@ -129,7 +143,7 @@ describe('Project Memory proposal safety boundary', () => {
       'automatic',
       'session-1',
       'supersedes',
-      'This decision replaces an older path-key assumption.',
+      '[confidence: high] This decision replaces an older path-key assumption.',
     )
 
     const missionTool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1', () => 'mission')
@@ -137,6 +151,8 @@ describe('Project Memory proposal safety boundary', () => {
       section: 'definitionOfDone',
       text: 'Mission acceptance requires a green full test run.',
       relationship: 'additive',
+      confidence: 'medium',
+      durability: 'project-wide',
     }, {} as never)
     expect(proposeCandidate).toHaveBeenLastCalledWith(
       WORKSPACE_ID,
@@ -145,49 +161,226 @@ describe('Project Memory proposal safety boundary', () => {
       'mission',
       'session-1',
       'append',
-      null,
+      '[confidence: medium]',
     )
+  })
+
+  it('filters low-confidence, task-local, and status-only facts before persistence', async () => {
+    const proposeCandidate = vi.fn()
+    const ctx = new Context()
+    ctx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => [],
+      get: () => undefined,
+    } as never)
+    const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
+
+    await expect(tool.execute({
+      section: 'decisions',
+      text: 'Use WorkspaceId as the durable key.',
+      relationship: 'additive',
+      confidence: 'low',
+      durability: 'project-wide',
+    }, {} as never)).resolves.toEqual({
+      section: 'decisions',
+      status: 'skipped-low-confidence',
+    })
+
+    await expect(tool.execute({
+      section: 'decisions',
+      text: 'Use this temporary branch for today.',
+      relationship: 'additive',
+      confidence: 'high',
+      durability: 'task-local',
+    }, {} as never)).resolves.toEqual({
+      section: 'decisions',
+      status: 'skipped-task-local',
+    })
+
+    await expect(tool.execute({
+      section: 'definitionOfDone',
+      text: 'All tests passed.',
+      relationship: 'additive',
+      confidence: 'high',
+      durability: 'project-wide',
+    }, {} as never)).resolves.toEqual({
+      section: 'definitionOfDone',
+      status: 'skipped-low-signal',
+    })
+
+    expect(internals.isLowSignalCandidate('knownIssues', '任务完成')).toBe(true)
+    expect(internals.isLowSignalCandidate('definitionOfDone', 'Release requires all gates green.')).toBe(false)
+    expect(internals.isLowSignalCandidate('commands', 'pnpm run build')).toBe(false)
+    expect(proposeCandidate).not.toHaveBeenCalled()
+  })
+
+  it('suppresses committed duplicates and clusters conservative near-duplicate pending candidates', async () => {
+    const proposeCandidate = vi.fn()
+    const committedCtx = new Context()
+    committedCtx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => [],
+      get: () => ({
+        sections: {
+          architecture: '', commands: '', conventions: '',
+          decisions: 'WorkspaceId is the durable project key.',
+          knownIssues: '', definitionOfDone: '',
+        },
+      }),
+    } as never)
+    const committedTool = internals.proposalTool(committedCtx, WORKSPACE_ID, 'session-1')
+
+    await expect(committedTool.execute({
+      section: 'decisions',
+      text: ' WorkspaceId is the durable project key. ',
+      relationship: 'additive',
+      ...durableArgs,
+    }, {} as never)).resolves.toEqual({
+      section: 'decisions',
+      status: 'skipped-already-recorded',
+    })
+
+    const pending = [{
+      id: 'candidate-existing',
+      workspaceId: WORKSPACE_ID,
+      section: 'decisions',
+      text: 'WorkspaceId is the durable project key.',
+      source: 'session',
+      sourceRef: 'session-old',
+      createdAt: '2026-08-15T00:00:00.000Z',
+      reviewHint: 'append',
+      rationale: null,
+      relation: 'new',
+    }]
+    const pendingCtx = new Context()
+    pendingCtx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => pending,
+      get: () => undefined,
+    } as never)
+    const pendingTool = internals.proposalTool(pendingCtx, WORKSPACE_ID, 'session-2')
+
+    await expect(pendingTool.execute({
+      section: 'decisions',
+      text: 'WorkspaceId is the stable durable project key.',
+      relationship: 'additive',
+      ...durableArgs,
+    }, {} as never)).resolves.toEqual({
+      candidateId: 'candidate-existing',
+      section: 'decisions',
+      status: 'already-pending',
+    })
+
+    expect(internals.candidateSimilarity(
+      'decisions',
+      'WorkspaceId is the durable project key.',
+      'WorkspaceId is the stable durable project key.',
+    )).toBeGreaterThanOrEqual(0.9)
+    expect(internals.candidateSimilarity('commands', 'pnpm run build', 'pnpm run build --filter web')).toBe(0)
+    expect(proposeCandidate).not.toHaveBeenCalled()
+  })
+
+  it('stops automatic additive growth at section and review-queue budgets', async () => {
+    const proposeCandidate = vi.fn()
+    const fullSectionCtx = new Context()
+    fullSectionCtx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => [],
+      get: () => ({
+        sections: {
+          architecture: '', commands: '', conventions: '', decisions: 'x'.repeat(11_995),
+          knownIssues: '', definitionOfDone: '',
+        },
+      }),
+    } as never)
+    const fullSectionTool = internals.proposalTool(fullSectionCtx, WORKSPACE_ID, 'session-1')
+    await expect(fullSectionTool.execute({
+      section: 'decisions',
+      text: 'Another durable decision.',
+      relationship: 'additive',
+      ...durableArgs,
+    }, {} as never)).resolves.toEqual({
+      section: 'decisions',
+      status: 'skipped-section-full',
+    })
+
+    const perSectionCtx = new Context()
+    perSectionCtx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => Array.from({ length: 24 }, (_, index) => ({
+        id: `candidate-${String(index)}`,
+        section: 'knownIssues',
+        text: `Distinct pending issue ${String(index)}`,
+        reviewHint: 'append',
+      })),
+      get: () => undefined,
+    } as never)
+    const perSectionTool = internals.proposalTool(perSectionCtx, WORKSPACE_ID, 'session-1')
+    await expect(perSectionTool.execute({
+      section: 'knownIssues',
+      text: 'Windows desktop still needs verification.',
+      relationship: 'additive',
+      ...durableArgs,
+    }, {} as never)).resolves.toEqual({
+      section: 'knownIssues',
+      status: 'skipped-queue-full',
+    })
+
+    const workspaceQueueCtx = new Context()
+    workspaceQueueCtx.provide('projectMemory', {
+      proposeCandidate,
+      candidates: () => Array.from({ length: 100 }, (_, index) => ({
+        id: `candidate-${String(index)}`,
+        section: index % 2 === 0 ? 'architecture' : 'conventions',
+        text: `Distinct pending fact ${String(index)}`,
+        reviewHint: 'append',
+      })),
+      get: () => undefined,
+    } as never)
+    const workspaceQueueTool = internals.proposalTool(workspaceQueueCtx, WORKSPACE_ID, 'session-1')
+    await expect(workspaceQueueTool.execute({
+      section: 'knownIssues',
+      text: 'Windows desktop still needs verification.',
+      relationship: 'additive',
+      ...durableArgs,
+    }, {} as never)).resolves.toEqual({
+      section: 'knownIssues',
+      status: 'skipped-queue-full',
+    })
+    expect(proposeCandidate).not.toHaveBeenCalled()
   })
 
   it('rejects empty, oversized, and credential-bearing candidate text or rationale before persistence', async () => {
     const proposeCandidate = vi.fn()
     const ctx = new Context()
-    ctx.provide('projectMemory', { proposeCandidate, candidates: () => [] } as never)
-    const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
-
-    await expect(tool.execute({ section: 'commands', text: '   ', relationship: 'additive' }, {} as never))
-      .rejects.toThrow(/must not be empty/)
-    await expect(tool.execute({
-      section: 'commands', text: 'x'.repeat(8_001), relationship: 'additive',
-    }, {} as never)).rejects.toThrow(/exceeds 8000 characters/)
-    await expect(tool.execute({
-      section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'x'.repeat(2_001),
-    }, {} as never)).rejects.toThrow(/rationale exceeds 2000 characters/)
-    await expect(tool.execute({
-      section: 'commands', text: 'API_KEY=sk-proj-abcdefghijklmnopqrstuv', relationship: 'additive',
-    }, {} as never)).rejects.toThrow(/credential or secret/)
-    await expect(tool.execute({
-      section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'token: abcdefghijklmnop',
-    }, {} as never)).rejects.toThrow(/credential or secret/)
-    expect(internals.containsSensitiveText('token: abcdefghijklmnop')).toBe(true)
-    expect(internals.containsSensitiveText('Run pnpm run constraints after code changes.')).toBe(false)
-    expect(proposeCandidate).not.toHaveBeenCalled()
-  })
-
-  it('caps automatic pending candidates per Workspace', async () => {
-    const proposeCandidate = vi.fn()
-    const ctx = new Context()
     ctx.provide('projectMemory', {
       proposeCandidate,
-      candidates: () => Array.from({ length: 100 }, (_, index) => ({ id: `candidate-${String(index)}` })),
+      candidates: () => [],
+      get: () => undefined,
     } as never)
     const tool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1')
 
     await expect(tool.execute({
-      section: 'knownIssues',
-      text: 'Windows desktop still needs verification.',
-      relationship: 'additive',
-    }, {} as never)).rejects.toThrow(/100 candidates pending review/)
+      section: 'commands', text: '   ', relationship: 'additive', ...durableArgs,
+    }, {} as never)).rejects.toThrow(/must not be empty/)
+    await expect(tool.execute({
+      section: 'commands', text: 'x'.repeat(8_001), relationship: 'additive', ...durableArgs,
+    }, {} as never)).rejects.toThrow(/exceeds 8000 characters/)
+    await expect(tool.execute({
+      section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'x'.repeat(2_001), ...durableArgs,
+    }, {} as never)).rejects.toThrow(/rationale exceeds 2000 characters/)
+    await expect(tool.execute({
+      section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'x'.repeat(1_990), ...durableArgs,
+    }, {} as never)).rejects.toThrow(/after confidence metadata/)
+    await expect(tool.execute({
+      section: 'commands', text: 'API_KEY=sk-proj-abcdefghijklmnopqrstuv', relationship: 'additive', ...durableArgs,
+    }, {} as never)).rejects.toThrow(/credential or secret/)
+    await expect(tool.execute({
+      section: 'commands', text: 'pnpm run build', relationship: 'additive', rationale: 'token: abcdefghijklmnop', ...durableArgs,
+    }, {} as never)).rejects.toThrow(/credential or secret/)
+    expect(internals.containsSensitiveText('token: abcdefghijklmnop')).toBe(true)
+    expect(internals.containsSensitiveText('Run pnpm run constraints after code changes.')).toBe(false)
+    expect(internals.auditRationale('high', null)).toBe('[confidence: high]')
     expect(proposeCandidate).not.toHaveBeenCalled()
   })
 
