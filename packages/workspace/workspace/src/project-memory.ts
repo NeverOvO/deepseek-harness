@@ -18,6 +18,8 @@ import type {
   ProjectMemoryCandidateQueueResult,
   ProjectMemoryCandidateQueueValue,
   ProjectMemoryCandidateRejected,
+  ProjectMemoryCandidateRelation,
+  ProjectMemoryCandidateReviewHint,
   ProjectMemoryCandidateSource,
   ProjectMemoryCandidateView,
   ProjectMemoryCandidatesRequest,
@@ -88,6 +90,10 @@ interface ProjectMemoryCandidateRecord {
   readonly source: ProjectMemoryCandidateSource
   readonly sourceRef: string | null
   readonly createdAt: string
+  /** Optional extractor signal. Old v1 rows legitimately omit this field. */
+  readonly reviewHint?: ProjectMemoryCandidateReviewHint
+  /** Optional extractor explanation. Old v1 rows legitimately omit this field. */
+  readonly rationale?: string | null
 }
 
 /** A write addressed a workspace that is not registered in Workspace Core. */
@@ -129,6 +135,8 @@ const projectMemoryCandidateRecordSchema: z.ZodType<ProjectMemoryCandidateRecord
   source: z.enum(['manual', 'session', 'mission', 'automatic']),
   sourceRef: z.string().nullable(),
   createdAt: z.string(),
+  reviewHint: z.enum(['append', 'supersedes', 'conflict']).optional(),
+  rationale: z.string().nullable().optional(),
 })
 
 /**
@@ -195,7 +203,44 @@ function recordSnapshot(workspaceId: WorkspaceId, record: ProjectMemoryRecord): 
   })
 }
 
-function candidateSnapshot(id: string, record: ProjectMemoryCandidateRecord): ProjectMemoryCandidateView {
+/** Stable comparison form that preserves case and punctuation-sensitive project identifiers. */
+function canonicalCandidateText(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** Exact/block/line containment without broad substring matches such as command prefixes. */
+function committedContainsCandidate(current: string, candidate: string): boolean {
+  const target = canonicalCandidateText(candidate)
+  if (target.length === 0) return false
+  const committed = canonicalCandidateText(current)
+  if (committed === target) return true
+  const blocks = current.split(/\n\s*\n/).map(canonicalCandidateText)
+  if (blocks.includes(target)) return true
+  const lines = current.split('\n').map(canonicalCandidateText).filter(Boolean)
+  return lines.includes(target)
+}
+
+function candidateRelation(
+  record: ProjectMemoryCandidateRecord,
+  currentSection: string,
+): ProjectMemoryCandidateRelation {
+  if (committedContainsCandidate(currentSection, record.text)) return 'duplicate'
+  if (currentSection.trim().length === 0) return 'new'
+  if (record.reviewHint === 'conflict' || record.reviewHint === 'supersedes') return 'conflict'
+  return 'merge'
+}
+
+function candidateSnapshot(
+  id: string,
+  record: ProjectMemoryCandidateRecord,
+  currentSection: string,
+): ProjectMemoryCandidateView {
   return Object.freeze({
     id,
     workspaceId: record.workspaceId as WorkspaceId,
@@ -204,6 +249,9 @@ function candidateSnapshot(id: string, record: ProjectMemoryCandidateRecord): Pr
     source: record.source,
     sourceRef: record.sourceRef,
     createdAt: record.createdAt,
+    reviewHint: record.reviewHint ?? null,
+    rationale: record.rationale ?? null,
+    relation: candidateRelation(record, currentSection),
   })
 }
 
@@ -215,11 +263,17 @@ function normalizeSectionText(text: string): string {
   return text.trim().length === 0 ? '' : text
 }
 
+function normalizeRationale(rationale: string | null | undefined): string | null {
+  if (rationale === undefined || rationale === null) return null
+  const normalized = rationale.trim()
+  return normalized.length === 0 ? null : normalized
+}
+
 function mergeCandidateText(current: string, candidate: string): string {
   const normalizedCandidate = normalizeSectionText(candidate)
   if (normalizedCandidate === '') return current
   if (current.trim() === '') return normalizedCandidate
-  if (current.includes(normalizedCandidate)) return current
+  if (committedContainsCandidate(current, normalizedCandidate)) return current
   return `${current.trimEnd()}\n\n${normalizedCandidate}`
 }
 
@@ -344,12 +398,13 @@ export class ProjectMemoryService extends TypertRemoteService {
     return EMPTY_SECTIONS
   }
 
-  /** Pending candidates for one Workspace, oldest first. */
+  /** Pending candidates for one Workspace, oldest first. Relations are computed against current memory. */
   candidates(workspaceId: WorkspaceId): readonly ProjectMemoryCandidateView[] {
+    const sections = this.get(workspaceId)?.sections ?? EMPTY_SECTIONS
     return Object.freeze(
       [...this.requireCandidateTable().entries()]
         .filter(([, record]) => record.workspaceId === workspaceId)
-        .map(([id, record]) => candidateSnapshot(id, record))
+        .map(([id, record]) => candidateSnapshot(id, record, sections[record.section]))
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     )
   }
@@ -405,23 +460,29 @@ export class ProjectMemoryService extends TypertRemoteService {
     return this.enqueue(async () => await this.requireTable().delete(workspaceId))
   }
 
-  /** Stage one pending candidate, deduplicating exact pending text in the same section. */
+  /** Stage one pending candidate, deduplicating canonical pending text in the same section. */
   proposeCandidate(
     workspaceId: WorkspaceId,
     section: ProjectMemorySection,
     text: string,
     source: ProjectMemoryCandidateSource,
     sourceRef: string | null,
+    reviewHint?: ProjectMemoryCandidateReviewHint,
+    rationale?: string | null,
   ): Promise<ProjectMemoryCandidateView> {
     return this.enqueue(async () => {
       this.assertKnownWorkspace(workspaceId)
       const normalized = normalizeSectionText(text)
       if (normalized === '') throw new Error('Project Memory candidate text must not be empty')
       const table = this.requireCandidateTable()
+      const canonical = canonicalCandidateText(normalized)
+      const currentSection = this.get(workspaceId)?.sections[section] ?? ''
       for (const [id, record] of table.entries()) {
         if (record.workspaceId === workspaceId
           && record.section === section
-          && record.text === normalized) return candidateSnapshot(id, record)
+          && canonicalCandidateText(record.text) === canonical) {
+          return candidateSnapshot(id, record, currentSection)
+        }
       }
       const id = randomUUID()
       const record: ProjectMemoryCandidateRecord = Object.freeze({
@@ -430,10 +491,12 @@ export class ProjectMemoryService extends TypertRemoteService {
         text: normalized,
         source,
         sourceRef,
+        ...(reviewHint === undefined ? {} : { reviewHint }),
+        rationale: normalizeRationale(rationale),
         createdAt: new Date().toISOString(),
       })
       await table.put(id, record)
-      return candidateSnapshot(id, record)
+      return candidateSnapshot(id, record, currentSection)
     })
   }
 
@@ -535,6 +598,8 @@ export class ProjectMemoryService extends TypertRemoteService {
         request.text,
         request.source,
         request.sourceRef,
+        request.reviewHint,
+        request.rationale,
       )
       return remoteSuccess(this.remoteCandidateQueue(request.workspaceId))
     } catch (error: unknown) {
