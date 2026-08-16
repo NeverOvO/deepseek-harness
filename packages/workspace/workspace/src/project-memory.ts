@@ -202,6 +202,8 @@ export const PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET = 4_000
 const PROJECT_MEMORY_CONTEXT_TRUNCATION_MARKER = '\n\n[… Project Memory context truncated …]\n\n'
 const PROJECT_MEMORY_CONTEXT_HEADER = 'Yanami Project Memory — durable workspace context stored by DSH outside the user repository. '
   + 'Use it as remembered project guidance and verify it against current files when facts may have changed.'
+/** Internal source marker for full-section consolidation candidates that require byte-exact snapshot CAS. */
+const PROJECT_MEMORY_CONSOLIDATION_SOURCE_PREFIX = 'consolidation:'
 
 function sectionsSnapshot(sections: ProjectMemorySections): ProjectMemorySections {
   return Object.freeze({
@@ -232,6 +234,14 @@ function canonicalCandidateText(text: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+function isConsolidationSourceRef(sourceRef: string | null | undefined): boolean {
+  return sourceRef?.startsWith(PROJECT_MEMORY_CONSOLIDATION_SOURCE_PREFIX) ?? false
+}
+
+function isConsolidationCandidate(record: ProjectMemoryCandidateRecord): boolean {
+  return isConsolidationSourceRef(record.sourceRef)
 }
 
 /** Exact/block/line containment without broad substring matches such as command prefixes. */
@@ -279,6 +289,11 @@ function candidateRelation(
   record: ProjectMemoryCandidateRecord,
   currentSection: string,
 ): ProjectMemoryCandidateRelation {
+  if (isConsolidationCandidate(record)) {
+    return currentSection === (record.supersedesText ?? '')
+      ? 'supersedes'
+      : 'conflict'
+  }
   if (committedContainsCandidate(currentSection, record.text)) return 'duplicate'
   if (record.reviewHint === 'conflict') return 'conflict'
   if (record.reviewHint === 'supersedes') {
@@ -556,7 +571,7 @@ export class ProjectMemoryService extends TypertRemoteService {
     return this.enqueue(async () => await this.requireTable().delete(workspaceId))
   }
 
-  /** Stage one pending candidate, deduplicating canonical pending text and replacement target in the same section. */
+  /** Stage one pending candidate, deduplicating pending text and its exact or canonical replacement target. */
   proposeCandidate(
     workspaceId: WorkspaceId,
     section: ProjectMemorySection,
@@ -571,16 +586,23 @@ export class ProjectMemoryService extends TypertRemoteService {
       this.assertKnownWorkspace(workspaceId)
       const normalized = normalizeSectionText(text)
       if (normalized === '') throw new Error('Project Memory candidate text must not be empty')
-      const normalizedSupersedes = normalizeSupersedesText(supersedesText)
+      const consolidation = isConsolidationSourceRef(sourceRef)
+      const normalizedSupersedes = consolidation
+        ? (supersedesText ?? null)
+        : normalizeSupersedesText(supersedesText)
       const table = this.requireCandidateTable()
       const canonical = canonicalCandidateText(normalized)
       const canonicalSupersedes = canonicalCandidateText(normalizedSupersedes ?? '')
       const currentSection = this.get(workspaceId)?.sections[section] ?? ''
       for (const [id, record] of table.entries()) {
+        const sameTarget = consolidation
+          ? isConsolidationCandidate(record) && record.supersedesText === normalizedSupersedes
+          : !isConsolidationCandidate(record)
+            && canonicalCandidateText(record.supersedesText ?? '') === canonicalSupersedes
         if (record.workspaceId === workspaceId
           && record.section === section
           && canonicalCandidateText(record.text) === canonical
-          && canonicalCandidateText(record.supersedesText ?? '') === canonicalSupersedes) {
+          && sameTarget) {
           return candidateSnapshot(id, record, currentSection)
         }
       }
@@ -621,11 +643,18 @@ export class ProjectMemoryService extends TypertRemoteService {
       if (relation === 'duplicate') {
         memory = currentMemory
       } else if (relation === 'supersedes') {
-        const replaced = replaceExactCandidateTarget(current, candidate.supersedesText ?? '', candidate.text)
-        if (replaced === undefined) {
-          throw new ProjectMemoryCandidateConflictError(workspaceId, candidateId)
+        if (isConsolidationCandidate(candidate)) {
+          if (current !== (candidate.supersedesText ?? '')) {
+            throw new ProjectMemoryCandidateConflictError(workspaceId, candidateId)
+          }
+          memory = await this.setSectionNow(workspaceId, candidate.section, candidate.text)
+        } else {
+          const replaced = replaceExactCandidateTarget(current, candidate.supersedesText ?? '', candidate.text)
+          if (replaced === undefined) {
+            throw new ProjectMemoryCandidateConflictError(workspaceId, candidateId)
+          }
+          memory = await this.setSectionNow(workspaceId, candidate.section, replaced)
         }
-        memory = await this.setSectionNow(workspaceId, candidate.section, replaced)
       } else {
         memory = await this.setSectionNow(
           workspaceId,
