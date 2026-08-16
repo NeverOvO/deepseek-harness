@@ -90,6 +90,11 @@ function props(controller: ProjectMemoryController): ProjectMemoryHeaderActionPr
   } as unknown as ProjectMemoryHeaderActionProps
 }
 
+function exactDivText(text: string) {
+  return (_content: string, element: Element | null): boolean =>
+    element?.tagName === 'DIV' && element.textContent === text
+}
+
 afterEach(() => { cleanup() })
 
 describe('Project Memory consolidation review UI', () => {
@@ -101,9 +106,9 @@ describe('Project Memory consolidation review UI', () => {
     await screen.findByLabelText('决策')
 
     expect(screen.getByText('当前正式记忆快照（Before）')).toBeTruthy()
-    expect(screen.getByText(BEFORE)).toBeTruthy()
+    expect(screen.getByText(exactDivText(BEFORE))).toBeTruthy()
     expect(screen.getByText('压缩后的候选结果（After）')).toBeTruthy()
-    expect(screen.getByText(AFTER)).toBeTruthy()
+    expect(screen.getByText(exactDivText(AFTER))).toBeTruthy()
     expect(screen.getByText('整理候选')).toBeTruthy()
     expect(screen.getByText('只有采纳才会替换正式记忆；采纳时 Host 会逐字重新校验 Before，期间有任何变化都会拒绝写入。')).toBeTruthy()
     expect((screen.getByLabelText('决策') as HTMLTextAreaElement).value).toBe(BEFORE)
