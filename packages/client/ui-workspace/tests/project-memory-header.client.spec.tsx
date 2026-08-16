@@ -128,8 +128,8 @@ function fakeController() {
 function props(
   workspace: ProjectMemoryWorkspace | null,
   controller: ProjectMemoryController,
+  controllerFor: ProjectMemoryHeaderActionProps['controllerFor'] = () => controller,
 ): ProjectMemoryHeaderActionProps {
-  const useProjectWorkspace: ProjectMemoryHeaderActionProps['useProjectWorkspace'] = selector => selector(workspace)
   const workspaceState: WorkspaceListState = {
     items: workspace === null ? [] : [{
       workspaceId: workspace.workspaceId,
@@ -150,8 +150,7 @@ function props(
   return {
     sessionId: SESSION_ID,
     useWorkspaces,
-    useProjectWorkspace,
-    controllerFor: () => controller,
+    controllerFor,
     t,
   } as unknown as ProjectMemoryHeaderActionProps
 }
@@ -163,6 +162,21 @@ describe('ProjectMemoryHeaderAction', () => {
     const { controller } = fakeController()
     render(<ProjectMemoryHeaderAction {...props(null, controller)} />)
     expect(screen.queryByRole('button', { name: '项目记忆' })).toBeNull()
+  })
+
+  it('keeps the trigger visible before controller resolution and surfaces a synchronous resolution failure only after open', () => {
+    const { controller } = fakeController()
+    const workspace: ProjectMemoryWorkspace = {
+      workspaceId: WORKSPACE_ID,
+      title: 'Yanami Test',
+    }
+    const controllerFor = () => { throw new Error('controller unavailable') }
+    render(<ProjectMemoryHeaderAction {...props(workspace, controller, controllerFor)} />)
+
+    const trigger = screen.getByRole('button', { name: '项目记忆' })
+    expect(trigger).toBeTruthy()
+    fireEvent.click(trigger)
+    expect(screen.getByRole('alert').textContent).toContain('controller unavailable')
   })
 
   it('loads the six-section editor and persists one atomic replacement', async () => {
