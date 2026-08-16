@@ -14,6 +14,7 @@ import { z } from 'zod'
 import type { WorkspaceId } from './types.ts'
 import type { WorkspaceRegistry } from './index.ts'
 import type {
+  ProjectMemoryCandidateConflict,
   ProjectMemoryCandidateNotFound,
   ProjectMemoryCandidateQueueResult,
   ProjectMemoryCandidateQueueValue,
@@ -92,6 +93,8 @@ interface ProjectMemoryCandidateRecord {
   readonly createdAt: string
   /** Optional extractor signal. Old v1 rows legitimately omit this field. */
   readonly reviewHint?: ProjectMemoryCandidateReviewHint | undefined
+  /** Exact existing block/line proposed for replacement. Old v1 rows omit it. */
+  readonly supersedesText?: string | null | undefined
   /** Optional extractor explanation. Old v1 rows legitimately omit this field. */
   readonly rationale?: string | null | undefined
 }
@@ -109,6 +112,14 @@ class ProjectMemoryUnknownCandidateError extends Error {
   constructor(readonly workspaceId: WorkspaceId, readonly candidateId: string) {
     super(`cannot review Project Memory candidate '${candidateId}' for workspace '${workspaceId}'`)
     this.name = 'ProjectMemoryUnknownCandidateError'
+  }
+}
+
+/** A review action cannot safely apply against the current authoritative section. */
+class ProjectMemoryCandidateConflictError extends Error {
+  constructor(readonly workspaceId: WorkspaceId, readonly candidateId: string) {
+    super(`cannot safely accept Project Memory candidate '${candidateId}' for workspace '${workspaceId}'`)
+    this.name = 'ProjectMemoryCandidateConflictError'
   }
 }
 
@@ -136,6 +147,7 @@ const projectMemoryCandidateRecordSchema: z.ZodType<ProjectMemoryCandidateRecord
   sourceRef: z.string().nullable(),
   createdAt: z.string(),
   reviewHint: z.enum(['append', 'supersedes', 'conflict']).optional(),
+  supersedesText: z.string().nullable().optional(),
   rationale: z.string().nullable().optional(),
 })
 
@@ -183,6 +195,14 @@ const PROJECT_MEMORY_HEADINGS: Readonly<Record<ProjectMemorySection, string>> = 
   definitionOfDone: 'Definition of Done',
 })
 
+/** Provider-independent hard ceiling for the model-facing Project Memory snapshot. */
+export const PROJECT_MEMORY_CONTEXT_CHAR_BUDGET = 16_000
+/** Per-section ceiling before the global Project Memory context budget is shared. */
+export const PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET = 4_000
+const PROJECT_MEMORY_CONTEXT_TRUNCATION_MARKER = '\n\n[… Project Memory context truncated …]\n\n'
+const PROJECT_MEMORY_CONTEXT_HEADER = 'Yanami Project Memory — durable workspace context stored by DSH outside the user repository. '
+  + 'Use it as remembered project guidance and verify it against current files when facts may have changed.'
+
 function sectionsSnapshot(sections: ProjectMemorySections): ProjectMemorySections {
   return Object.freeze({
     architecture: sections.architecture,
@@ -226,13 +246,48 @@ function committedContainsCandidate(current: string, candidate: string): boolean
   return lines.includes(target)
 }
 
+/**
+ * Replace exactly one committed full section, blank-line block, or line.
+ * Ambiguous and stale targets return undefined rather than guessing.
+ */
+function replaceExactCandidateTarget(current: string, target: string, candidate: string): string | undefined {
+  const canonicalTarget = canonicalCandidateText(target)
+  const normalizedCandidate = normalizeSectionText(candidate)
+  if (canonicalTarget.length === 0 || normalizedCandidate === '') return undefined
+  if (canonicalCandidateText(current) === canonicalTarget) return normalizedCandidate
+
+  const blocks = current.split(/\n\s*\n/)
+  const blockMatches = blocks.flatMap((block, index) =>
+    canonicalCandidateText(block) === canonicalTarget ? [index] : [])
+  if (blockMatches.length === 1) {
+    const next = [...blocks]
+    next[blockMatches[0] as number] = normalizedCandidate
+    return next.join('\n\n')
+  }
+  if (blockMatches.length > 1) return undefined
+
+  const lines = current.split('\n')
+  const lineMatches = lines.flatMap((line, index) =>
+    canonicalCandidateText(line) === canonicalTarget ? [index] : [])
+  if (lineMatches.length !== 1) return undefined
+  const next = [...lines]
+  next[lineMatches[0] as number] = normalizedCandidate
+  return next.join('\n')
+}
+
 function candidateRelation(
   record: ProjectMemoryCandidateRecord,
   currentSection: string,
 ): ProjectMemoryCandidateRelation {
   if (committedContainsCandidate(currentSection, record.text)) return 'duplicate'
+  if (record.reviewHint === 'conflict') return 'conflict'
+  if (record.reviewHint === 'supersedes') {
+    const target = record.supersedesText ?? ''
+    return replaceExactCandidateTarget(currentSection, target, record.text) === undefined
+      ? 'conflict'
+      : 'supersedes'
+  }
   if (currentSection.trim().length === 0) return 'new'
-  if (record.reviewHint === 'conflict' || record.reviewHint === 'supersedes') return 'conflict'
   return 'merge'
 }
 
@@ -250,6 +305,7 @@ function candidateSnapshot(
     sourceRef: record.sourceRef,
     createdAt: record.createdAt,
     reviewHint: record.reviewHint ?? null,
+    supersedesText: record.supersedesText ?? null,
     rationale: record.rationale ?? null,
     relation: candidateRelation(record, currentSection),
   })
@@ -269,12 +325,32 @@ function normalizeRationale(rationale: string | null | undefined): string | null
   return normalized.length === 0 ? null : normalized
 }
 
+function normalizeSupersedesText(text: string | null | undefined): string | null {
+  if (text === undefined || text === null) return null
+  const normalized = text.trim()
+  return normalized.length === 0 ? null : normalized
+}
+
 function mergeCandidateText(current: string, candidate: string): string {
   const normalizedCandidate = normalizeSectionText(candidate)
   if (normalizedCandidate === '') return current
   if (current.trim() === '') return normalizedCandidate
   if (committedContainsCandidate(current, normalizedCandidate)) return current
   return `${current.trimEnd()}\n\n${normalizedCandidate}`
+}
+
+/** Keep both the oldest and newest facts when model context must be shortened. */
+function truncateProjectMemoryContextText(text: string, maxChars: number): string {
+  const normalized = text.trim()
+  if (normalized.length <= maxChars) return normalized
+  if (maxChars <= PROJECT_MEMORY_CONTEXT_TRUNCATION_MARKER.length) {
+    return PROJECT_MEMORY_CONTEXT_TRUNCATION_MARKER.slice(0, maxChars)
+  }
+  const available = maxChars - PROJECT_MEMORY_CONTEXT_TRUNCATION_MARKER.length
+  const headChars = Math.ceil(available / 2)
+  const tailChars = Math.floor(available / 2)
+  const tail = tailChars === 0 ? '' : normalized.slice(-tailChars).trimStart()
+  return `${normalized.slice(0, headChars).trimEnd()}${PROJECT_MEMORY_CONTEXT_TRUNCATION_MARKER}${tail}`
 }
 
 /** Freeze one host memory snapshot before it crosses the typed Remote boundary. */
@@ -318,22 +394,42 @@ function remoteCandidateMissing(workspaceId: WorkspaceId, candidateId: string): 
   return Object.freeze({ ok: false, error })
 }
 
+function remoteCandidateConflict(workspaceId: WorkspaceId, candidateId: string): ProjectMemoryCandidateRejected {
+  const error: ProjectMemoryCandidateConflict = Object.freeze({
+    code: 'candidate-conflict',
+    workspaceId,
+    candidateId,
+  })
+  return Object.freeze({ ok: false, error })
+}
+
 /**
- * Render the model-facing Project Memory snapshot. Empty sections are omitted
- * to avoid wasting context tokens while the canonical section order remains stable.
+ * Render the model-facing Project Memory snapshot. The full durable value stays
+ * available to Workbench, while this provider-independent view has deterministic
+ * per-section and global character ceilings so long-lived memory cannot crowd
+ * the conversation window without bound.
  */
 export function renderProjectMemoryContext(memory: ProjectMemory): string {
-  const sections = projectMemorySectionNames.flatMap((section) => {
+  const entries = projectMemorySectionNames.flatMap((section) => {
     const text = memory.sections[section]
     if (text.trim().length === 0) return []
-    return [`## ${PROJECT_MEMORY_HEADINGS[section]}\n${text}`]
+    return [{ heading: `## ${PROJECT_MEMORY_HEADINGS[section]}\n`, text }]
   })
-  if (sections.length === 0) return ''
-  return [
-    'Yanami Project Memory — durable workspace context stored by DSH outside the user repository. '
-      + 'Use it as remembered project guidance and verify it against current files when facts may have changed.',
-    ...sections,
-  ].join('\n\n')
+  if (entries.length === 0) return ''
+
+  const separatorChars = entries.length * 2
+  const headingChars = entries.reduce((total, entry) => total + entry.heading.length, 0)
+  const bodyBudget = Math.max(
+    0,
+    Math.floor((PROJECT_MEMORY_CONTEXT_CHAR_BUDGET
+      - PROJECT_MEMORY_CONTEXT_HEADER.length
+      - separatorChars
+      - headingChars) / entries.length),
+  )
+  const perSectionBudget = Math.min(PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET, bodyBudget)
+  const sections = entries.map(entry =>
+    `${entry.heading}${truncateProjectMemoryContextText(entry.text, perSectionBudget)}`)
+  return [PROJECT_MEMORY_CONTEXT_HEADER, ...sections].join('\n\n')
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -460,7 +556,7 @@ export class ProjectMemoryService extends TypertRemoteService {
     return this.enqueue(async () => await this.requireTable().delete(workspaceId))
   }
 
-  /** Stage one pending candidate, deduplicating canonical pending text in the same section. */
+  /** Stage one pending candidate, deduplicating canonical pending text and replacement target in the same section. */
   proposeCandidate(
     workspaceId: WorkspaceId,
     section: ProjectMemorySection,
@@ -469,18 +565,22 @@ export class ProjectMemoryService extends TypertRemoteService {
     sourceRef: string | null,
     reviewHint?: ProjectMemoryCandidateReviewHint,
     rationale?: string | null,
+    supersedesText?: string | null,
   ): Promise<ProjectMemoryCandidateView> {
     return this.enqueue(async () => {
       this.assertKnownWorkspace(workspaceId)
       const normalized = normalizeSectionText(text)
       if (normalized === '') throw new Error('Project Memory candidate text must not be empty')
+      const normalizedSupersedes = normalizeSupersedesText(supersedesText)
       const table = this.requireCandidateTable()
       const canonical = canonicalCandidateText(normalized)
+      const canonicalSupersedes = canonicalCandidateText(normalizedSupersedes ?? '')
       const currentSection = this.get(workspaceId)?.sections[section] ?? ''
       for (const [id, record] of table.entries()) {
         if (record.workspaceId === workspaceId
           && record.section === section
-          && canonicalCandidateText(record.text) === canonical) {
+          && canonicalCandidateText(record.text) === canonical
+          && canonicalCandidateText(record.supersedesText ?? '') === canonicalSupersedes) {
           return candidateSnapshot(id, record, currentSection)
         }
       }
@@ -492,6 +592,7 @@ export class ProjectMemoryService extends TypertRemoteService {
         source,
         sourceRef,
         ...(reviewHint === undefined ? {} : { reviewHint }),
+        supersedesText: normalizedSupersedes,
         rationale: normalizeRationale(rationale),
         createdAt: new Date().toISOString(),
       })
@@ -500,7 +601,7 @@ export class ProjectMemoryService extends TypertRemoteService {
     })
   }
 
-  /** Accept a pending candidate into its canonical section, then remove it from review. */
+  /** Accept a pending candidate only when its Host-computed relation is safe at commit time. */
   acceptCandidate(workspaceId: WorkspaceId, candidateId: string): Promise<ProjectMemory | undefined> {
     return this.enqueue(async () => {
       this.assertKnownWorkspace(workspaceId)
@@ -509,12 +610,29 @@ export class ProjectMemoryService extends TypertRemoteService {
       if (candidate === undefined || candidate.workspaceId !== workspaceId) {
         throw new ProjectMemoryUnknownCandidateError(workspaceId, candidateId)
       }
-      const current = this.get(workspaceId)?.sections[candidate.section] ?? ''
-      const memory = await this.setSectionNow(
-        workspaceId,
-        candidate.section,
-        mergeCandidateText(current, candidate.text),
-      )
+      const currentMemory = this.get(workspaceId)
+      const current = currentMemory?.sections[candidate.section] ?? ''
+      const relation = candidateRelation(candidate, current)
+      if (relation === 'conflict') {
+        throw new ProjectMemoryCandidateConflictError(workspaceId, candidateId)
+      }
+
+      let memory: ProjectMemory | undefined
+      if (relation === 'duplicate') {
+        memory = currentMemory
+      } else if (relation === 'supersedes') {
+        const replaced = replaceExactCandidateTarget(current, candidate.supersedesText ?? '', candidate.text)
+        if (replaced === undefined) {
+          throw new ProjectMemoryCandidateConflictError(workspaceId, candidateId)
+        }
+        memory = await this.setSectionNow(workspaceId, candidate.section, replaced)
+      } else {
+        memory = await this.setSectionNow(
+          workspaceId,
+          candidate.section,
+          mergeCandidateText(current, candidate.text),
+        )
+      }
       await table.delete(candidateId)
       return memory
     })
@@ -600,6 +718,7 @@ export class ProjectMemoryService extends TypertRemoteService {
         request.sourceRef,
         request.reviewHint,
         request.rationale,
+        request.supersedesText,
       )
       return remoteSuccess(this.remoteCandidateQueue(request.workspaceId))
     } catch (error: unknown) {
@@ -608,7 +727,7 @@ export class ProjectMemoryService extends TypertRemoteService {
     }
   }
 
-  /** Accept one candidate and atomically order its merge ahead of later review mutations. */
+  /** Accept one candidate and atomically revalidate its review relation before mutation. */
   @Remote('acceptCandidate')
   async remoteAcceptCandidate(
     request: ProjectMemoryReviewCandidateRequest,
@@ -620,6 +739,9 @@ export class ProjectMemoryService extends TypertRemoteService {
       if (error instanceof ProjectMemoryUnknownWorkspaceError) return remoteWorkspaceMissing(error.workspaceId)
       if (error instanceof ProjectMemoryUnknownCandidateError) {
         return remoteCandidateMissing(error.workspaceId, error.candidateId)
+      }
+      if (error instanceof ProjectMemoryCandidateConflictError) {
+        return remoteCandidateConflict(error.workspaceId, error.candidateId)
       }
       throw error
     }
