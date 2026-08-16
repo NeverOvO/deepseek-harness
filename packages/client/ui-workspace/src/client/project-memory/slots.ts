@@ -1,8 +1,6 @@
 /** Project Memory header-action contract owned by ui-workspace. */
 
-import type {
-  HostObservable, InjectFace, PropsLocale, PropsRuntime,
-} from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   ProjectMemoryController, WorkspaceId, WorkspaceView,
@@ -15,11 +13,7 @@ export type ProjectMemoryWorkspace = Pick<WorkspaceView, 'workspaceId' | 'title'
 
 /** Business share injected into one session-scoped Project Memory header action. */
 export interface ProjectMemoryHeaderInjected {
-  hooks: {
-    /** Current Workspace account for this Session; null for an ungrouped Session. */
-    projectWorkspace: HostObservable<ProjectMemoryWorkspace | null>
-  }
-  /** Resolve the stable Workspace-keyed Project Memory controller. */
+  /** Resolve the stable Workspace-keyed Project Memory controller on demand. */
   controllerFor: (workspaceId: WorkspaceId) => ProjectMemoryController
 }
 
