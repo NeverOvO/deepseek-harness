@@ -8,6 +8,8 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import WorkspaceRegistry, { WorkspaceId } from '../src/index.ts'
 import ProjectMemoryService, {
+  PROJECT_MEMORY_CONTEXT_CHAR_BUDGET,
+  PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET,
   ProjectMemoryUnknownWorkspaceError,
   renderProjectMemoryContext,
 } from '../src/project-memory.ts'
@@ -134,6 +136,7 @@ describe('ProjectMemoryService', () => {
       source: 'session',
       sourceRef: 'session-1',
       reviewHint: null,
+      supersedesText: null,
       rationale: null,
       relation: 'new',
     }])
@@ -185,6 +188,22 @@ describe('ProjectMemoryService', () => {
     )
     expect(merge.relation).toBe('merge')
 
+    const supersedes = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Workspace UUID is the stable Project Memory key.',
+      'automatic',
+      'session-1',
+      'supersedes',
+      'Replace the previous durable-key decision.',
+      'WorkspaceId is the stable Project Memory key.',
+    )
+    expect(supersedes).toMatchObject({
+      relation: 'supersedes',
+      reviewHint: 'supersedes',
+      supersedesText: 'WorkspaceId is the stable Project Memory key.',
+    })
+
     const conflict = await result.memory.proposeCandidate(
       workspace.id,
       'decisions',
@@ -208,6 +227,71 @@ describe('ProjectMemoryService', () => {
       null,
     )
     expect(fresh.relation).toBe('new')
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
+  })
+
+  it('accepts only one exact supersede target and refuses stale or ambiguous replacements', async () => {
+    const result = await harness()
+    const workspace = await result.registry.create(await makeDir('supersede'))
+    await result.memory.setSection(
+      workspace.id,
+      'decisions',
+      'Use project paths as the durable key.\n\nKeep metadata outside repositories.',
+    )
+
+    const exact = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Use WorkspaceId as the durable key.',
+      'automatic',
+      'session-1',
+      'supersedes',
+      'The stable identity decision changed.',
+      'Use project paths as the durable key.',
+    )
+    expect(exact.relation).toBe('supersedes')
+    await result.memory.acceptCandidate(workspace.id, exact.id)
+    expect(result.memory.get(workspace.id)?.sections.decisions).toBe(
+      'Use WorkspaceId as the durable key.\n\nKeep metadata outside repositories.',
+    )
+
+    const stale = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Use a generated workspace UUID as the durable key.',
+      'automatic',
+      'session-2',
+      'supersedes',
+      'Replace the WorkspaceId wording.',
+      'Use WorkspaceId as the durable key.',
+    )
+    expect(stale.relation).toBe('supersedes')
+    await result.memory.setSection(
+      workspace.id,
+      'decisions',
+      'Use canonical WorkspaceId values as the durable key.\n\nKeep metadata outside repositories.',
+    )
+    expect(result.memory.candidates(workspace.id).find(candidate => candidate.id === stale.id)?.relation)
+      .toBe('conflict')
+    await expect(result.memory.acceptCandidate(workspace.id, stale.id)).rejects.toThrow(/cannot safely accept/)
+    expect(result.memory.candidates(workspace.id).some(candidate => candidate.id === stale.id)).toBe(true)
+
+    await result.memory.setSection(workspace.id, 'decisions', 'Legacy key.\nLegacy key.')
+    const ambiguous = await result.memory.proposeCandidate(
+      workspace.id,
+      'decisions',
+      'Use WorkspaceId as the durable key.',
+      'automatic',
+      'session-3',
+      'supersedes',
+      'Two identical lines make replacement ambiguous.',
+      'Legacy key.',
+    )
+    expect(ambiguous.relation).toBe('conflict')
+    await expect(result.memory.acceptCandidate(workspace.id, ambiguous.id)).rejects.toThrow(/cannot safely accept/)
+    expect(result.memory.get(workspace.id)?.sections.decisions).toBe('Legacy key.\nLegacy key.')
 
     await result.memoryFiber.dispose()
     await result.workspaceFiber.dispose()
@@ -257,6 +341,34 @@ describe('ProjectMemoryService', () => {
     expect(rendered).not.toContain('## Architecture')
     expect(rendered.indexOf('## Commands')).toBeLessThan(rendered.indexOf('## Decisions'))
     expect(rendered.indexOf('## Decisions')).toBeLessThan(rendered.indexOf('## Definition of Done'))
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
+  })
+
+  it('bounds model-facing context without truncating durable Project Memory', async () => {
+    const result = await harness()
+    const workspace = await result.registry.create(await makeDir('context-budget'))
+    const longDecision = `oldest-fact-${'a'.repeat(PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET + 2_000)}-newest-fact`
+    const memory = await result.memory.replace(workspace.id, {
+      architecture: `architecture-${'b'.repeat(5_000)}-architecture-tail`,
+      commands: `commands-${'c'.repeat(5_000)}-commands-tail`,
+      conventions: `conventions-${'d'.repeat(5_000)}-conventions-tail`,
+      decisions: longDecision,
+      knownIssues: `issues-${'e'.repeat(5_000)}-issues-tail`,
+      definitionOfDone: `done-${'f'.repeat(5_000)}-done-tail`,
+    })
+    expect(memory).toBeDefined()
+
+    const rendered = renderProjectMemoryContext(memory!)
+    expect(rendered.length).toBeLessThanOrEqual(PROJECT_MEMORY_CONTEXT_CHAR_BUDGET)
+    expect(rendered).toContain('[… Project Memory context truncated …]')
+    expect(rendered).toContain('oldest-fact-')
+    expect(rendered).toContain('-newest-fact')
+    expect(result.memory.get(workspace.id)?.sections.decisions).toBe(longDecision)
+    expect(result.memory.get(workspace.id)?.sections.decisions.length).toBeGreaterThan(
+      PROJECT_MEMORY_CONTEXT_SECTION_CHAR_BUDGET,
+    )
 
     await result.memoryFiber.dispose()
     await result.workspaceFiber.dispose()
