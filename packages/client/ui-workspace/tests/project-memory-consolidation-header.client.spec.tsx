@@ -85,7 +85,6 @@ function props(controller: ProjectMemoryController): ProjectMemoryHeaderActionPr
     workspaceId: WORKSPACE_ID,
     title: 'Yanami Consolidation Test',
   }
-  const useProjectWorkspace: ProjectMemoryHeaderActionProps['useProjectWorkspace'] = selector => selector(workspace)
   const workspaceState: WorkspaceListState = {
     items: [{
       workspaceId: WORKSPACE_ID,
@@ -106,7 +105,6 @@ function props(controller: ProjectMemoryController): ProjectMemoryHeaderActionPr
   return {
     sessionId: SESSION_ID,
     useWorkspaces,
-    useProjectWorkspace,
     controllerFor: () => controller,
     t,
   } as unknown as ProjectMemoryHeaderActionProps
