@@ -12,7 +12,7 @@ function agentPreset(agentPreset?: string): Pick<Agent, 'session'> {
     session: {
       header: agentPreset === undefined ? {} : { agentPreset },
       events: [],
-    } as Agent['session'],
+    } as unknown as Agent['session'],
   }
 }
 
