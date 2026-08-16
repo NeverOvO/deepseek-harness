@@ -53,6 +53,15 @@ function candidateRelationHelp(relation: string): WorkspaceKey {
   return 'memory.candidates.relationHelp.new'
 }
 
+/** Exact additive result the Host will persist when a merge candidate is accepted. */
+function candidateMergeSuggestion(current: string, candidate: string, relation: string): string | null {
+  if (relation !== 'merge') return null
+  const text = candidate.trim()
+  if (text === '') return null
+  if (current.trim() === '') return text
+  return `${current.trimEnd()}\n\n${text}`
+}
+
 /** Header trigger owns the always-on lightweight candidate-count subscription. */
 function ProjectMemoryTrigger({
   controller,
@@ -276,6 +285,11 @@ function ProjectMemoryEditor({
                 {review.candidates.map(candidate => {
                   const row = SECTION_ROWS.find(item => item.key === candidate.section)
                   const busy = candidateBusy === candidate.id
+                  const suggestion = candidateMergeSuggestion(
+                    committed[candidate.section],
+                    candidate.text,
+                    candidate.relation,
+                  )
                   return (
                     <article className={css.candidateCard} key={candidate.id}>
                       <div className={css.candidateMeta}>
@@ -287,6 +301,12 @@ function ProjectMemoryEditor({
                       </div>
                       <div className={css.candidateText}>{candidate.text}</div>
                       <div className={css.help}>{t(candidateRelationHelp(candidate.relation))}</div>
+                      {suggestion !== null && (
+                        <div>
+                          <div className={css.help}>{t('memory.candidates.mergeSuggestion')}</div>
+                          <div className={css.candidateText}>{suggestion}</div>
+                        </div>
+                      )}
                       {candidate.rationale !== null && candidate.rationale.trim() !== '' && (
                         <div className={css.help}>{candidate.rationale}</div>
                       )}
