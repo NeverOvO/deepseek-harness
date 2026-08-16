@@ -81,6 +81,9 @@ function failure(code: string, message: string): ProjectMemoryActionResult {
 function businessMessage(code: string): string {
   if (code === 'workspace-not-found') return 'this workspace is no longer registered'
   if (code === 'candidate-not-found') return 'this Project Memory candidate is no longer pending'
+  if (code === 'candidate-conflict') {
+    return 'this Project Memory candidate no longer has one safe acceptance target; review the current memory and try again'
+  }
   return code
 }
 
