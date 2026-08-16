@@ -45,6 +45,16 @@ export interface ProjectMemoryView {
 /** Origin of a candidate before it is accepted into durable Project Memory. */
 export type ProjectMemoryCandidateSource = 'manual' | 'session' | 'mission' | 'automatic'
 
+/**
+ * Advisory relationship supplied by an automatic extractor. It never grants
+ * permission to replace committed memory; the Host still computes the review
+ * relation against the current authoritative section.
+ */
+export type ProjectMemoryCandidateReviewHint = 'append' | 'supersedes' | 'conflict'
+
+/** Host-computed relationship between a pending candidate and committed memory. */
+export type ProjectMemoryCandidateRelation = 'new' | 'duplicate' | 'merge' | 'conflict'
+
 /** One pending candidate waiting for human review. */
 export interface ProjectMemoryCandidateView {
   readonly id: string
@@ -54,6 +64,12 @@ export interface ProjectMemoryCandidateView {
   readonly source: ProjectMemoryCandidateSource
   readonly sourceRef: string | null
   readonly createdAt: string
+  /** Advisory extractor signal retained for review/audit; never an overwrite instruction. */
+  readonly reviewHint: ProjectMemoryCandidateReviewHint | null
+  /** Optional concise explanation produced by the extractor. */
+  readonly rationale: string | null
+  /** Authoritative Host classification against the current committed section. */
+  readonly relation: ProjectMemoryCandidateRelation
 }
 
 /** Read the Project Memory associated with one stable Workspace identity. */
@@ -91,6 +107,8 @@ export interface ProjectMemoryProposeCandidateRequest {
   readonly text: string
   readonly source: ProjectMemoryCandidateSource
   readonly sourceRef: string | null
+  readonly reviewHint?: ProjectMemoryCandidateReviewHint
+  readonly rationale?: string | null
 }
 
 /** Accept or reject one candidate belonging to a Workspace. */
