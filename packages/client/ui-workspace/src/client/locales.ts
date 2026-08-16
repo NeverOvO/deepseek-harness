@@ -95,6 +95,14 @@ export const zh = {
   'memory.candidates.source.session': '会话',
   'memory.candidates.source.mission': '任务',
   'memory.candidates.source.automatic': '自动提取',
+  'memory.candidates.relation.new': '新增',
+  'memory.candidates.relation.duplicate': '已存在',
+  'memory.candidates.relation.merge': '需合并',
+  'memory.candidates.relation.conflict': '可能冲突',
+  'memory.candidates.relationHelp.new': '当前分类还没有正式内容；采纳后会作为首条记忆加入。',
+  'memory.candidates.relationHelp.duplicate': '正式记忆中已有相同内容；采纳只会清除这条重复候选，不会重复写入。',
+  'memory.candidates.relationHelp.merge': '当前分类已有其他内容；采纳后会追加，不会覆盖现有记忆。',
+  'memory.candidates.relationHelp.conflict': '这条候选可能替代或冲突于现有内容；即使采纳也只会追加，不会自动覆盖。',
 } satisfies Record<string, string>
 
 /** The workspace namespace key union. */
@@ -191,4 +199,12 @@ export const en = {
   'memory.candidates.source.session': 'Session',
   'memory.candidates.source.mission': 'Mission',
   'memory.candidates.source.automatic': 'Automatic',
+  'memory.candidates.relation.new': 'New',
+  'memory.candidates.relation.duplicate': 'Already recorded',
+  'memory.candidates.relation.merge': 'Merge needed',
+  'memory.candidates.relation.conflict': 'Possible conflict',
+  'memory.candidates.relationHelp.new': 'This section has no committed content yet; accepting adds the first memory entry.',
+  'memory.candidates.relationHelp.duplicate': 'The same content is already committed; accepting only clears this duplicate candidate.',
+  'memory.candidates.relationHelp.merge': 'This section already contains other content; accepting appends without overwriting it.',
+  'memory.candidates.relationHelp.conflict': 'This candidate may replace or conflict with existing content; accepting still only appends and never overwrites automatically.',
 } satisfies Record<WorkspaceKey, string>
