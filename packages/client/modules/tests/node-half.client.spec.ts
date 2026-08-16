@@ -17,13 +17,19 @@ afterEach(() => {
   root = undefined
 })
 
-/** Create a resolvable package whose client export points at the returned path. */
-function writePackage(
+/** Return the shared fixture root, creating it on first use. */
+function fixtureRoot(): string {
+  root ??= realpathSync(mkdtempSync(join(tmpdir(), 'dsh-client-modules-')))
+  return root
+}
+
+/** Create a resolvable package under one module-resolution root. */
+function writePackageAt(
+  baseRoot: string,
   packageName: string,
   metadata: Record<string, unknown> = { dsh: { client: { platform: 'web' } } },
 ): string {
-  root ??= realpathSync(mkdtempSync(join(tmpdir(), 'dsh-client-modules-')))
-  const pkgRoot = join(root, 'node_modules', ...packageName.split('/'))
+  const pkgRoot = join(baseRoot, 'node_modules', ...packageName.split('/'))
   const clientPath = join(pkgRoot, 'lib', 'client.js')
   mkdirSync(pkgRoot, { recursive: true })
   writeFileSync(join(pkgRoot, 'package.json'), JSON.stringify({
@@ -37,11 +43,32 @@ function writePackage(
   return clientPath
 }
 
+/** Create a package under the ordinary config-tree resolution root. */
+function writePackage(
+  packageName: string,
+  metadata: Record<string, unknown> = { dsh: { client: { platform: 'web' } } },
+): string {
+  return writePackageAt(fixtureRoot(), packageName, metadata)
+}
+
+interface ConstructOptions {
+  baseRoot?: string
+  preferredBaseRoot?: string
+}
+
 /** Construct the node-half service and capture its plugin-bundle route. */
-function constructWithRoute(packageNames: string[]): { service: ClientModuleRegistry; route: WebRoute } {
+function constructWithRoute(
+  packageNames: string[],
+  options: ConstructOptions = {},
+): { service: ClientModuleRegistry; route: WebRoute } {
   const ctx = new Context()
-  ctx.baseUrl = pathToFileURL(root!).href + '/'
+  const baseRoot = options.baseRoot ?? fixtureRoot()
+  ctx.baseUrl = pathToFileURL(join(baseRoot, '__profile_anchor__.mjs')).href
+  const preferredBareModuleBaseUrl = options.preferredBaseRoot === undefined
+    ? undefined
+    : pathToFileURL(join(options.preferredBaseRoot, '__installation_anchor__.mjs')).href
   ctx.provide('loader', {
+    config: preferredBareModuleBaseUrl === undefined ? {} : { preferredBareModuleBaseUrl },
     *entries() {
       for (const packageName of packageNames) {
         yield { options: { name: packageName }, fiber: {}, disabled: false }
@@ -81,6 +108,44 @@ describe('client bundle activation', () => {
     mkdirSync(dirname(clientPath), { recursive: true })
     writeFileSync(clientPath, 'module.exports = {}\n')
     expect(construct([currentName]).graph().entries.map(entry => entry.id)).toEqual([currentName])
+  })
+
+  it('prefers the installation package over a stale profile-local client bundle', () => {
+    const packageName = '@fixture/installation-first'
+    const base = fixtureRoot()
+    const profileRoot = join(base, 'profile')
+    const installationRoot = join(base, 'installation')
+    const staleClientPath = writePackageAt(profileRoot, packageName)
+    const currentClientPath = writePackageAt(installationRoot, packageName)
+    mkdirSync(dirname(staleClientPath), { recursive: true })
+    mkdirSync(dirname(currentClientPath), { recursive: true })
+    writeFileSync(staleClientPath, 'export const source = "stale-profile"\n')
+    writeFileSync(currentClientPath, 'export const source = "current-installation"\n')
+
+    const service = constructWithRoute([packageName], {
+      baseRoot: profileRoot,
+      preferredBaseRoot: installationRoot,
+    }).service
+
+    expect(service.clientPath(packageName)).toBe(currentClientPath)
+  })
+
+  it('falls back to profile-local packages absent from the installation closure', () => {
+    const packageName = '@fixture/profile-only'
+    const base = fixtureRoot()
+    const profileRoot = join(base, 'profile')
+    const installationRoot = join(base, 'installation')
+    const profileClientPath = writePackageAt(profileRoot, packageName)
+    mkdirSync(dirname(profileClientPath), { recursive: true })
+    writeFileSync(profileClientPath, 'export const source = "profile-only"\n')
+    mkdirSync(installationRoot, { recursive: true })
+
+    const service = constructWithRoute([packageName], {
+      baseRoot: profileRoot,
+      preferredBaseRoot: installationRoot,
+    }).service
+
+    expect(service.clientPath(packageName)).toBe(profileClientPath)
   })
 
   it('groups missing bundles under one source-build instruction with a package/path list', () => {
