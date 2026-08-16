@@ -8,7 +8,7 @@
  * package owns only the Workbench presentation.
  */
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
@@ -110,35 +110,16 @@ export function apply(ctx: ClientContext): void {
     hooks: { directoryFlow: pickerFlowSource },
   })
 
-  // Each Session action gets one stable derived Workspace source. Returning
-  // the Workspace object already held by the list store keeps getSnapshot()
-  // referentially stable until the Host projection actually changes.
-  const projectWorkspaceSources = new Map<SessionId, ProjectMemoryHeaderInjected['hooks']['projectWorkspace']>()
-  const projectWorkspaceSource = (sessionId: SessionId): ProjectMemoryHeaderInjected['hooks']['projectWorkspace'] => {
-    let source = projectWorkspaceSources.get(sessionId)
-    if (source !== undefined) return source
-    source = {
-      getSnapshot: () => {
-        const workspace = ctx.workspaces.list.getSnapshot().items
-          .find(item => item.sessionIds.includes(sessionId))
-        return workspace === undefined ? null : workspace
-      },
-      subscribe: listener => ctx.workspaces.list.subscribe(listener),
-    }
-    projectWorkspaceSources.set(sessionId, source)
-    return source
-  }
-
-  // Additive Project Memory entry beside the session title. Ungrouped sessions
-  // resolve a null Workspace and render no control; moving a Session between
-  // Workspace accounts updates the hook without remounting the session header.
+  // Additive Project Memory entry beside the session title. Session → Workspace
+  // membership is resolved by the renderer's standard useWorkspaces seat, the
+  // exact Host-backed source that drives the sidebar. The injected business
+  // face stays controller-only and is not touched until the user opens memory.
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions',
     id: 'project-memory',
     order: 30,
     locale: NS,
-    inject: (sessionId: SessionId): ProjectMemoryHeaderInjected => ({
-      hooks: { projectWorkspace: projectWorkspaceSource(sessionId) },
+    inject: (): ProjectMemoryHeaderInjected => ({
       controllerFor: workspaceId => ctx.projectMemories.forWorkspace(workspaceId),
     }),
   }, ProjectMemoryHeaderAction))
