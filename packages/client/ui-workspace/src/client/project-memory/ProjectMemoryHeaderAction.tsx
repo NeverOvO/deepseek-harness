@@ -42,6 +42,7 @@ function candidateSourceLabel(source: string): WorkspaceKey {
 function candidateRelationLabel(relation: string): WorkspaceKey {
   if (relation === 'duplicate') return 'memory.candidates.relation.duplicate'
   if (relation === 'merge') return 'memory.candidates.relation.merge'
+  if (relation === 'supersedes') return 'memory.candidates.relation.supersedes'
   if (relation === 'conflict') return 'memory.candidates.relation.conflict'
   return 'memory.candidates.relation.new'
 }
@@ -49,6 +50,7 @@ function candidateRelationLabel(relation: string): WorkspaceKey {
 function candidateRelationHelp(relation: string): WorkspaceKey {
   if (relation === 'duplicate') return 'memory.candidates.relationHelp.duplicate'
   if (relation === 'merge') return 'memory.candidates.relationHelp.merge'
+  if (relation === 'supersedes') return 'memory.candidates.relationHelp.supersedes'
   if (relation === 'conflict') return 'memory.candidates.relationHelp.conflict'
   return 'memory.candidates.relationHelp.new'
 }
@@ -290,6 +292,7 @@ function ProjectMemoryEditor({
                     candidate.text,
                     candidate.relation,
                   )
+                  const conflicts = candidate.relation === 'conflict'
                   return (
                     <article className={css.candidateCard} key={candidate.id}>
                       <div className={css.candidateMeta}>
@@ -301,6 +304,12 @@ function ProjectMemoryEditor({
                       </div>
                       <div className={css.candidateText}>{candidate.text}</div>
                       <div className={css.help}>{t(candidateRelationHelp(candidate.relation))}</div>
+                      {candidate.supersedesText !== null && candidate.supersedesText.trim() !== '' && (
+                        <div>
+                          <div className={css.help}>{t('memory.candidates.supersedesTarget')}</div>
+                          <div className={css.candidateText}>{candidate.supersedesText}</div>
+                        </div>
+                      )}
                       {suggestion !== null && (
                         <div>
                           <div className={css.help}>{t('memory.candidates.mergeSuggestion')}</div>
@@ -320,7 +329,7 @@ function ProjectMemoryEditor({
                         </Button>
                         <Button
                           variant="primary"
-                          disabled={candidateBusy !== null || dirty}
+                          disabled={candidateBusy !== null || dirty || conflicts}
                           onClick={() => { reviewCandidate(candidate.id, true) }}
                         >
                           {t('memory.candidates.accept')}
