@@ -91,9 +91,9 @@ interface ProjectMemoryCandidateRecord {
   readonly sourceRef: string | null
   readonly createdAt: string
   /** Optional extractor signal. Old v1 rows legitimately omit this field. */
-  readonly reviewHint?: ProjectMemoryCandidateReviewHint
+  readonly reviewHint?: ProjectMemoryCandidateReviewHint | undefined
   /** Optional extractor explanation. Old v1 rows legitimately omit this field. */
-  readonly rationale?: string | null
+  readonly rationale?: string | null | undefined
 }
 
 /** A write addressed a workspace that is not registered in Workspace Core. */
@@ -297,7 +297,6 @@ function remoteSnapshot(memory: ProjectMemory): ProjectMemoryView {
 function remoteReadValue(memory: ProjectMemory | undefined): ProjectMemoryReadValue {
   return Object.freeze({ memory: memory === undefined ? null : remoteSnapshot(memory) })
 }
-
 function remoteSuccess<T>(value: T): ProjectMemorySuccess<T> {
   return Object.freeze({ ok: true, value })
 }
