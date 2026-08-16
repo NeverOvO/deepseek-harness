@@ -24,6 +24,55 @@ describe('Project Memory proposal safety boundary', () => {
     expect(internals.workspaceForSession(ctx, 'session-new', '/projects/other')).toBeUndefined()
   })
 
+  it('classifies one lifecycle review per completed model turn and prioritizes mission completion', () => {
+    const ordinary = {
+      session: {
+        events: [
+          { type: 'turn/start', data: { turn: 1 } },
+          { type: 'assistant/message', data: { turn: 1 } },
+        ],
+      },
+    } as never
+    expect(internals.automaticReviewSource(ordinary, 1)).toBe('session')
+
+    const mission = {
+      session: {
+        events: [
+          { type: 'turn/start', data: { turn: 2 } },
+          { type: 'goal/change', data: { operation: 'complete' } },
+          { type: 'assistant/message', data: { turn: 2 } },
+        ],
+      },
+    } as never
+    expect(internals.automaticReviewSource(mission, 2)).toBe('mission')
+
+    const alreadyProposed = {
+      session: {
+        events: [
+          { type: 'turn/start', data: { turn: 3 } },
+          { type: 'assistant/message', data: { turn: 3 } },
+          { type: 'tool/call', data: { turn: 3, name: PROJECT_MEMORY_PROPOSE_TOOL } },
+        ],
+      },
+    } as never
+    expect(internals.automaticReviewSource(alreadyProposed, 3)).toBeUndefined()
+
+    const noModelOutput = {
+      session: { events: [{ type: 'turn/start', data: { turn: 4 } }] },
+    } as never
+    expect(internals.automaticReviewSource(noModelOutput, 4)).toBeUndefined()
+
+    const message = internals.automaticReviewMessage('mission') as unknown as {
+      readonly role: string
+      readonly content: readonly { readonly type: string; readonly text: string }[]
+      readonly source: { readonly kind: string; readonly form: string; readonly summary: string }
+    }
+    expect(message.role).toBe('user')
+    expect(message.source).toMatchObject({ kind: 'plugin', form: 'notice', summary: 'Project Memory mission review' })
+    expect(message.content[0]?.text).toContain(PROJECT_MEMORY_PROPOSE_TOOL)
+    expect(message.content[0]?.text).toContain('mission-completion')
+  })
+
   it('does not expose workspace identity or commit operations to the model', async () => {
     const proposeCandidate = vi.fn(async (
       workspaceId: typeof WORKSPACE_ID,
@@ -81,6 +130,22 @@ describe('Project Memory proposal safety boundary', () => {
       'session-1',
       'supersedes',
       'This decision replaces an older path-key assumption.',
+    )
+
+    const missionTool = internals.proposalTool(ctx, WORKSPACE_ID, 'session-1', () => 'mission')
+    await missionTool.execute({
+      section: 'definitionOfDone',
+      text: 'Mission acceptance requires a green full test run.',
+      relationship: 'additive',
+    }, {} as never)
+    expect(proposeCandidate).toHaveBeenLastCalledWith(
+      WORKSPACE_ID,
+      'definitionOfDone',
+      'Mission acceptance requires a green full test run.',
+      'mission',
+      'session-1',
+      'append',
+      null,
     )
   })
 
