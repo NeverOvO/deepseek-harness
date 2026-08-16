@@ -297,6 +297,7 @@ function remoteSnapshot(memory: ProjectMemory): ProjectMemoryView {
 function remoteReadValue(memory: ProjectMemory | undefined): ProjectMemoryReadValue {
   return Object.freeze({ memory: memory === undefined ? null : remoteSnapshot(memory) })
 }
+
 function remoteSuccess<T>(value: T): ProjectMemorySuccess<T> {
   return Object.freeze({ ok: true, value })
 }
