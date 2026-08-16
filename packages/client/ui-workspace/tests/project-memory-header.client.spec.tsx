@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ProjectMemoryController,
@@ -125,6 +125,8 @@ function props(
     t,
   } as unknown as ProjectMemoryHeaderActionProps
 }
+
+afterEach(() => { cleanup() })
 
 describe('ProjectMemoryHeaderAction', () => {
   it('stays absent for a Session outside every registered Workspace', () => {
