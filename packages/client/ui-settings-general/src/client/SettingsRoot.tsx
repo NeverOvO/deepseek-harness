@@ -11,6 +11,7 @@
  * to the step, so a mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
@@ -39,6 +40,12 @@ type PanelProps = {
  * The modal layer: full-viewport mask + centered panel. Close paths: the
  * header button, a mask click, and document-level Escape (mounted only while
  * open, so the listener lifetime is the panel's).
+ *
+ * The settings trigger lives inside the sidebar. Rendering the overlay in the
+ * same DOM subtree allows a transformed/contained sidebar ancestor to become
+ * the containing block for `position: fixed`, which collapses the dialog into
+ * sidebar width. Portal the overlay to document.body so viewport geometry and
+ * stacking are independent from sidebar layout.
  */
 function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
@@ -58,7 +65,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   const closeButton = useRef<HTMLButtonElement | null>(null)
   useEffect(() => { closeButton.current?.focus() }, [])
 
-  return (
+  return createPortal((
     <div className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -93,7 +100,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
         </div>
       </div>
     </div>
-  )
+  ), document.body)
 }
 
 /**
