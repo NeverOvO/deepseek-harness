@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ProjectMemoryController, ProjectMemoryState } from '@deepseek-ai/dsh-client-runtime/client'
+import type {
+  ProjectMemoryController, ProjectMemoryState, WorkspaceId,
+} from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceKey } from '../locales.ts'
 import type { ProjectMemoryHeaderActionProps } from './slots.ts'
 import css from './ProjectMemoryHeaderAction.module.css'
@@ -72,29 +74,21 @@ function candidateMergeSuggestion(current: string, candidate: string, relation: 
   return `${current.trimEnd()}\n\n${text}`
 }
 
-/** Header trigger owns the always-on lightweight candidate-count subscription. */
+/**
+ * Header trigger is deliberately controller-free. Project Memory transport,
+ * cache creation, and candidate subscriptions start only after an explicit
+ * user open, so a business-service initialization fault cannot erase the
+ * navigation affordance from the session header.
+ */
 function ProjectMemoryTrigger({
-  controller,
   open,
   onToggle,
   t,
 }: {
-  controller: ProjectMemoryController
   open: boolean
   onToggle: () => void
   t: ProjectMemoryHeaderActionProps['t']
 }) {
-  const review = useSyncExternalStore(
-    controller.subscribeCandidates,
-    controller.getCandidateSnapshot,
-    controller.getCandidateSnapshot,
-  )
-
-  useEffect(() => {
-    void controller.ensureCandidates()
-  }, [controller])
-
-  const count = review.state === 'ready' ? review.candidates.length : 0
   return (
     <button
       type="button"
@@ -103,7 +97,6 @@ function ProjectMemoryTrigger({
       onClick={onToggle}
     >
       {t('memory.action')}
-      {count > 0 && <span className={css.badge} aria-hidden="true">{count > 99 ? '99+' : count}</span>}
     </button>
   )
 }
@@ -380,6 +373,52 @@ function ProjectMemoryEditor({
   )
 }
 
+/**
+ * Resolve the controller only while the modal is open. Synchronous service
+ * failures become visible UI instead of escaping into the slot boundary and
+ * permanently blanking the header entry.
+ */
+function ProjectMemoryOpenPanel({
+  workspaceId,
+  workspaceName,
+  controllerFor,
+  onClose,
+  t,
+}: {
+  workspaceId: WorkspaceId
+  workspaceName: string
+  controllerFor: ProjectMemoryHeaderActionProps['controllerFor']
+  onClose: () => void
+  t: ProjectMemoryHeaderActionProps['t']
+}) {
+  let controller: ProjectMemoryController
+  try {
+    controller = controllerFor(workspaceId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        closeLabel={t('close')}
+        title={t('memory.title', { name: workspaceName })}
+        description={t('memory.description')}
+        footer={<Button variant="outline" onClick={onClose}>{t('cancel')}</Button>}
+      >
+        <div className={css.error} role="alert">{message || t('memory.error')}</div>
+      </Modal>
+    )
+  }
+  return (
+    <ProjectMemoryEditor
+      controller={controller}
+      workspaceName={workspaceName}
+      onClose={onClose}
+      t={t}
+    />
+  )
+}
+
 /** Additive session-header control: hidden when the Session is not accounted to a Workspace. */
 export function ProjectMemoryHeaderAction({
   sessionId,
@@ -388,8 +427,8 @@ export function ProjectMemoryHeaderAction({
   t,
 }: ProjectMemoryHeaderActionProps) {
   // Resolve membership from the framework's standard Workspace seat—the same
-  // Host-backed projection that renders the sidebar. Avoid a second derived
-  // observable whose session/workspace lifecycle can drift from the slot scope.
+  // Host-backed projection that renders the sidebar. No Project Memory
+  // controller or remote source is touched while the header is merely visible.
   const workspace = useWorkspaces(state => (
     state.items.find(item => item.sessionIds.includes(sessionId)) ?? null
   ))
@@ -400,21 +439,20 @@ export function ProjectMemoryHeaderAction({
   }, [workspace?.workspaceId])
 
   if (workspace === null) return null
-  const controller = controllerFor(workspace.workspaceId)
 
   return (
     <>
       <ProjectMemoryTrigger
-        controller={controller}
         open={open}
         onToggle={() => { setOpen(value => !value) }}
         t={t}
       />
       {open && (
-        <ProjectMemoryEditor
+        <ProjectMemoryOpenPanel
           key={workspace.workspaceId}
-          controller={controller}
+          workspaceId={workspace.workspaceId}
           workspaceName={workspace.title}
+          controllerFor={controllerFor}
           onClose={() => { setOpen(false) }}
           t={t}
         />
