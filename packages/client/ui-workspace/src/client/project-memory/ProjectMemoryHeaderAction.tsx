@@ -382,11 +382,17 @@ function ProjectMemoryEditor({
 
 /** Additive session-header control: hidden when the Session is not accounted to a Workspace. */
 export function ProjectMemoryHeaderAction({
-  useProjectWorkspace,
+  sessionId,
+  useWorkspaces,
   controllerFor,
   t,
 }: ProjectMemoryHeaderActionProps) {
-  const workspace = useProjectWorkspace(value => value)
+  // Resolve membership from the framework's standard Workspace seat—the same
+  // Host-backed projection that renders the sidebar. Avoid a second derived
+  // observable whose session/workspace lifecycle can drift from the slot scope.
+  const workspace = useWorkspaces(state => (
+    state.items.find(item => item.sessionIds.includes(sessionId)) ?? null
+  ))
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
