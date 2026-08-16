@@ -55,6 +55,14 @@ function candidateRelationHelp(relation: string): WorkspaceKey {
   return 'memory.candidates.relationHelp.new'
 }
 
+function isConsolidationCandidate(candidate: {
+  readonly reviewHint: string | null
+  readonly sourceRef: string | null
+}): boolean {
+  return candidate.reviewHint === 'supersedes'
+    && candidate.sourceRef?.startsWith('consolidation:') === true
+}
+
 /** Exact additive result the Host will persist when a merge candidate is accepted. */
 function candidateMergeSuggestion(current: string, candidate: string, relation: string): string | null {
   if (relation !== 'merge') return null
@@ -287,12 +295,16 @@ function ProjectMemoryEditor({
                 {review.candidates.map(candidate => {
                   const row = SECTION_ROWS.find(item => item.key === candidate.section)
                   const busy = candidateBusy === candidate.id
+                  const consolidation = isConsolidationCandidate(candidate)
                   const suggestion = candidateMergeSuggestion(
                     committed[candidate.section],
                     candidate.text,
                     candidate.relation,
                   )
                   const conflicts = candidate.relation === 'conflict'
+                  const relationLabel = consolidation && !conflicts
+                    ? 'memory.candidates.relation.consolidation'
+                    : candidateRelationLabel(candidate.relation)
                   return (
                     <article className={css.candidateCard} key={candidate.id}>
                       <div className={css.candidateMeta}>
@@ -300,21 +312,37 @@ function ProjectMemoryEditor({
                         <span>·</span>
                         <span>{t(candidateSourceLabel(candidate.source))}</span>
                         <span>·</span>
-                        <span>{t(candidateRelationLabel(candidate.relation))}</span>
+                        <span>{t(relationLabel)}</span>
                       </div>
-                      <div className={css.candidateText}>{candidate.text}</div>
-                      <div className={css.help}>{t(candidateRelationHelp(candidate.relation))}</div>
-                      {candidate.supersedesText !== null && candidate.supersedesText.trim() !== '' && (
-                        <div>
-                          <div className={css.help}>{t('memory.candidates.supersedesTarget')}</div>
-                          <div className={css.candidateText}>{candidate.supersedesText}</div>
-                        </div>
-                      )}
-                      {suggestion !== null && (
-                        <div>
-                          <div className={css.help}>{t('memory.candidates.mergeSuggestion')}</div>
-                          <div className={css.candidateText}>{suggestion}</div>
-                        </div>
+                      {consolidation ? (
+                        <>
+                          <div className={css.help}>{t('memory.candidates.consolidation.before')}</div>
+                          <div className={css.candidateText}>{candidate.supersedesText ?? ''}</div>
+                          <div className={css.help}>{t('memory.candidates.consolidation.after')}</div>
+                          <div className={css.candidateText}>{candidate.text}</div>
+                          <div className={css.help}>
+                            {t(conflicts
+                              ? 'memory.candidates.relationHelp.conflict'
+                              : 'memory.candidates.consolidation.help')}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className={css.candidateText}>{candidate.text}</div>
+                          <div className={css.help}>{t(candidateRelationHelp(candidate.relation))}</div>
+                          {candidate.supersedesText !== null && candidate.supersedesText.trim() !== '' && (
+                            <div>
+                              <div className={css.help}>{t('memory.candidates.supersedesTarget')}</div>
+                              <div className={css.candidateText}>{candidate.supersedesText}</div>
+                            </div>
+                          )}
+                          {suggestion !== null && (
+                            <div>
+                              <div className={css.help}>{t('memory.candidates.mergeSuggestion')}</div>
+                              <div className={css.candidateText}>{suggestion}</div>
+                            </div>
+                          )}
+                        </>
                       )}
                       {candidate.rationale !== null && candidate.rationale.trim() !== '' && (
                         <div className={css.help}>{candidate.rationale}</div>
