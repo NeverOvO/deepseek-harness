@@ -27,15 +27,13 @@ export type YanamiMode = YanamiBaseMode | 'plan'
 /** Host-folded effective Yanami mode exposed to browser clients. */
 export interface YanamiModeProjection {
   mode: YanamiMode
-  /** Whether this session's DSH preset explicitly opts into Yanami collaboration modes. */
-  available: boolean
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Plan collaboration state folded from `command/run` (name `plan`) and `plan/mode` events. */
     plan: PlanProjection
-    /** Effective Yanami collaboration mode; unavailable outside explicitly supported DSH presets. */
+    /** Yanami collaboration mode folded from DSH-owned command and Plan events. */
     yanamiMode: YanamiModeProjection
   }
 }

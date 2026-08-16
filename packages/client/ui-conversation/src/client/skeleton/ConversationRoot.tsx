@@ -27,11 +27,16 @@ export function ConversationRoot({
   const session = useSession(s => s)
   const inputState = useInput(s => s)
   const cwd = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.cwd)
+  const agentPreset = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.agentPreset)
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
   const sessionCount = useSessions(s => Object.keys(s.byId).length)
   const workspaces = useWorkspaces(s => s)
   const yanamiMode = useProjection('yanamiMode')
   const goal = useProjection('goal')
+  // Current DSH summaries record the composed preset. `undefined` stays a
+  // compatibility allowance for legacy/rosterless rows; Host/model policy is
+  // still fail-closed and rejects any agent not actually composed as Standard.
+  const yanamiModeAvailable = agentPreset === undefined || agentPreset === 'standard'
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
@@ -43,7 +48,7 @@ export function ConversationRoot({
   const pickerAnchor = useRef<HTMLButtonElement>(null)
 
   const chooseMode = useCallback((mode: YanamiMode): void => {
-    if (yanamiMode?.available === false
+    if (!yanamiModeAvailable
       || switchYanamiMode === undefined
       || switchingMode !== undefined
       || yanamiMode?.mode === mode) return
@@ -56,7 +61,7 @@ export function ConversationRoot({
     }).finally(() => {
       setSwitchingMode(undefined)
     })
-  }, [switchYanamiMode, switchingMode, yanamiMode?.available, yanamiMode?.mode])
+  }, [switchYanamiMode, switchingMode, yanamiMode?.mode, yanamiModeAvailable])
 
   // Publishes the seat's live height as --dsh-composer-height on the scroll
   // body so floating controls (ChatView back-to-bottom) clear the composer as
@@ -190,10 +195,10 @@ export function ConversationRoot({
           t={t}
           sessionCount={sessionCount}
           {...cwd === undefined ? {} : { cwd }}
-          {...yanamiMode?.available !== true ? {} : { activeMode: yanamiMode.mode }}
+          {...!yanamiModeAvailable || yanamiMode?.mode === undefined ? {} : { activeMode: yanamiMode.mode }}
           {...switchingMode === undefined ? {} : { switchingMode }}
           {...modeError === undefined ? {} : { modeError }}
-          {...yanamiMode?.available === false || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
+          {...!yanamiModeAvailable || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
           {...goal === undefined ? {} : { mission: goal }}
         />
       )}
