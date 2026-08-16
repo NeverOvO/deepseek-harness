@@ -1,10 +1,7 @@
-/* Settings shell (figma 501:29904 mask context / 501:29947 panel): sidebar
-   foot trigger row + centered 1080x700 modal panel. The trigger uses the
-   sidebar's 34px compact row / 36px rail circle rhythm; the
-   panel is a two-column layout — 188px nav rail + content column with a
-   54px header and the 24px-padded options area. */
+/* Yanami settings shell. The trigger remains part of the sidebar, while the
+   dialog is portalled to document.body by SettingsRoot.tsx so viewport
+   geometry cannot be inherited from a contained/transformed sidebar. */
 
-/* Trigger row: match the other wide sidebar controls' compact vertical rhythm. */
 .trigger {
   flex: none;
   display: flex;
@@ -30,7 +27,6 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Rail trigger: the same 36x36 circle box as the other rail controls. */
 .trigger.rail {
   width: 36px;
   height: 36px;
@@ -46,8 +42,6 @@
   white-space: nowrap;
 }
 
-/* Full-viewport layer (figma Mask 501:29946 #000@24%): mask tokens match the
-   Modal primitive (--dsw-alias-bg-mask-1 + --dsw-mask-blur). */
 .overlay {
   position: fixed;
   inset: 0;
@@ -55,6 +49,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 36px;
+  box-sizing: border-box;
 }
 
 .mask {
@@ -64,70 +60,58 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-/* Panel (figma Settings 501:29947): r24, white, lv3 shadow (figma effects
-   match --dsw-shadow-lv3 exactly); figma's 1080x700 is shrunk to 800 wide.
-   One height for every section, taken from the viewport rather than the
-   content: sections differ by hundreds of pixels (a settings list against the
-   composition editor), and a content-sized panel would resize under the
-   pointer on every nav click. Whatever does not fit scrolls in `.options`. */
 .panel {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 800px;
-  height: min(800px, calc(100vh - 48px));
-  max-width: calc(100vw - 48px);
+  width: min(1040px, calc(100vw - 72px));
+  height: min(760px, calc(100vh - 72px));
+  min-width: 720px;
+  max-width: 100%;
+  min-height: 520px;
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 24px;
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-shadow-lv3);
-  /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens.
-     Declared on the panel rather than the scrolling `.options` child so the
-     elevation choice sits with the surface; the custom properties inherit
-     down to whichever descendant scrolls (see ui-theme
-     styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-/* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
-   gap 18, no own fill — the panel white shows through. */
 .nav {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  width: 188px;
-  padding: 22px 12px 0;
+  width: 220px;
+  padding: 24px 14px;
   box-sizing: border-box;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 88%, var(--dsw-alias-interactive-bg-hover));
 }
 
-/* Title row (figma 501:29959): 16/500 lh24, 12px side padding. */
 .navTitle {
   padding: 0 12px;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
+  font-size: 17px;
+  line-height: 26px;
+  font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
-/* Cell stack (figma 501:29961): gap 4. */
 .navList {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
-/* Nav cell (figma .Setting-nav-cell 501:29962): 164x40, r12, pad
-   (12,9,16,9), gap 8; label 14/400 lh22; selected fill #EBEEF2. */
 .navCell {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 9px 16px 9px 12px;
+  gap: 9px;
+  min-height: 42px;
+  padding: 9px 14px 9px 12px;
   box-sizing: border-box;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
   cursor: pointer;
@@ -144,6 +128,7 @@
 }
 
 .navCell.active {
+  border-color: var(--dsw-alias-border-l2);
   background: var(--dsw-specific-sidebar-nav-item-active);
 }
 
@@ -159,23 +144,22 @@
   text-overflow: ellipsis;
 }
 
-/* Content column (figma Content 501:29980): header + options. */
 .content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background: var(--dsw-alias-bg-layer-2);
 }
 
-/* Header (figma .Header 501:29981): h54, pad (10,20,14,8), close right. */
 .header {
   flex: none;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  height: 54px;
-  padding: 20px 14px 8px 10px;
+  gap: 12px;
+  min-height: 64px;
+  padding: 18px 22px 10px 24px;
   box-sizing: border-box;
 }
 
@@ -188,34 +172,35 @@
   margin-left: auto;
 }
 
-/* Close button (figma .Icon_container 501:29982): 28x28, r28, 14px glyph. */
 .close {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: none;
-  border-radius: 28px;
+  border-radius: 10px;
   background: transparent;
   cursor: pointer;
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .close:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
-/* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
 .options {
   flex: 1;
   min-height: 0;
-  padding: 0 24px 24px;
-  overflow-y: auto;
+  min-width: 0;
+  padding: 6px 28px 32px;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-/* Visually-hidden text seat (close button accessible name from slot content). */
 .hiddenLabel {
   position: absolute;
   width: 1px;
@@ -223,4 +208,45 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .overlay {
+    padding: 20px;
+  }
+
+  .panel {
+    width: calc(100vw - 40px);
+    height: calc(100vh - 40px);
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .nav {
+    width: 184px;
+    padding-inline: 10px;
+  }
+
+  .options {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 680px) {
+  .panel {
+    flex-direction: column;
+  }
+
+  .nav {
+    width: 100%;
+    max-height: 190px;
+    border-right: 0;
+    border-bottom: 1px solid var(--dsw-alias-border-l2);
+    overflow: auto;
+  }
+
+  .navList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
