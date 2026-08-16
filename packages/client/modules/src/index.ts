@@ -202,15 +202,29 @@ export class ClientModuleRegistry extends Service {
    */
   constructor(ctx: Context) {
     super(ctx, 'clientModules')
-    // Resolution anchor: the config tree's baseUrl (the cordis.yml directory,
-    // whose package declares every composed plugin as a dependency). The
-    // modules package's own URL would miss sibling packages under pnpm's
-    // isolated node_modules.
+    // Client metadata must resolve from the same installation-first package
+    // universe as host-owned bare Loader entries. Otherwise a stale
+    // profile-local node_modules copy can execute the current host plugin while
+    // ClientModuleRegistry serves an older browser bundle for the same package.
+    // Third-party/profile-only packages still fall back to the config tree.
     if (ctx.baseUrl === undefined) {
       throw new Error('client-modules: ctx.baseUrl is unset — the node half needs the config-tree anchor to resolve plugin packages')
     }
-    const require = createRequire(ctx.baseUrl)
-    this.resolvePkgJson = spec => require.resolve(`${spec}/package.json`)
+    const profileRequire = createRequire(ctx.baseUrl)
+    const preferredBaseUrl = ctx.loader.config.preferredBareModuleBaseUrl
+    const preferredRequire = preferredBaseUrl === undefined ? undefined : createRequire(preferredBaseUrl)
+    this.resolvePkgJson = (spec) => {
+      const pkgJson = `${spec}/package.json`
+      if (preferredRequire !== undefined) {
+        try {
+          return preferredRequire.resolve(pkgJson)
+        } catch {
+          // Installation closure does not own this package; profile-local
+          // plugins remain valid through the ordinary config-tree fallback.
+        }
+      }
+      return profileRequire.resolve(pkgJson)
+    }
 
     // Subscribe before seeding so a fiber arriving mid-activation lands in the
     // same dirty set (Set idempotence makes the overlap harmless). An entry-less
