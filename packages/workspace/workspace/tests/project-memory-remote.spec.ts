@@ -118,6 +118,7 @@ describe('ProjectMemoryService Remote surface', () => {
           section: 'commands',
           text: 'pnpm run constraints',
           source: 'manual',
+          supersedesText: null,
         }],
       },
     })
@@ -164,6 +165,51 @@ describe('ProjectMemoryService Remote surface', () => {
         candidates: [],
       },
     })
+
+    await result.memoryFiber.dispose()
+    await result.workspaceFiber.dispose()
+  })
+
+  it('returns candidate-conflict and preserves the queue when safe acceptance becomes stale', async () => {
+    const result = await harness()
+    const workspace = await result.ctx.workspaceRegistry.create(await makeDir('conflict'))
+    await result.ctx.projectMemory.setSection(workspace.id, 'decisions', 'Use paths as the durable key.')
+
+    const proposed = await result.ctx.projectMemory.remoteProposeCandidate({
+      workspaceId: workspace.id,
+      section: 'decisions',
+      text: 'Use WorkspaceId as the durable key.',
+      source: 'automatic',
+      sourceRef: 'session-1',
+      reviewHint: 'supersedes',
+      supersedesText: 'Use paths as the durable key.',
+      rationale: 'The durable key changed.',
+    })
+    if (!proposed.ok) throw new Error('supersede proposal failed')
+    const candidateId = proposed.value.candidates[0]?.id
+    if (candidateId === undefined) throw new Error('candidate id missing')
+    expect(proposed.value.candidates[0]).toMatchObject({
+      relation: 'supersedes',
+      supersedesText: 'Use paths as the durable key.',
+    })
+
+    await result.ctx.projectMemory.setSection(workspace.id, 'decisions', 'Use canonical WorkspaceId values.')
+    await expect(result.ctx.projectMemory.remoteAcceptCandidate({
+      workspaceId: workspace.id,
+      candidateId,
+    })).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'candidate-conflict',
+        workspaceId: workspace.id,
+        candidateId,
+      },
+    })
+    expect(result.ctx.projectMemory.get(workspace.id)?.sections.decisions).toBe('Use canonical WorkspaceId values.')
+    expect(result.ctx.projectMemory.candidates(workspace.id)).toMatchObject([{
+      id: candidateId,
+      relation: 'conflict',
+    }])
 
     await result.memoryFiber.dispose()
     await result.workspaceFiber.dispose()
