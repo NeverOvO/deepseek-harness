@@ -91,6 +91,7 @@ export const zh = {
   'memory.candidates.accept': '采纳',
   'memory.candidates.reject': '忽略',
   'memory.candidates.saveFirst': '请先保存上方已修改的正式记忆，再采纳候选。',
+  'memory.candidates.mergeSuggestion': '建议合并结果（采纳后）',
   'memory.candidates.source.manual': '手动',
   'memory.candidates.source.session': '会话',
   'memory.candidates.source.mission': '任务',
@@ -101,7 +102,7 @@ export const zh = {
   'memory.candidates.relation.conflict': '可能冲突',
   'memory.candidates.relationHelp.new': '当前分类还没有正式内容；采纳后会作为首条记忆加入。',
   'memory.candidates.relationHelp.duplicate': '正式记忆中已有相同内容；采纳只会清除这条重复候选，不会重复写入。',
-  'memory.candidates.relationHelp.merge': '当前分类已有其他内容；采纳后会追加，不会覆盖现有记忆。',
+  'memory.candidates.relationHelp.merge': '当前分类已有其他内容；下方显示采纳后会形成的完整合并结果，不会覆盖现有记忆。',
   'memory.candidates.relationHelp.conflict': '这条候选可能替代或冲突于现有内容；即使采纳也只会追加，不会自动覆盖。',
 } satisfies Record<string, string>
 
@@ -195,6 +196,7 @@ export const en = {
   'memory.candidates.accept': 'Accept',
   'memory.candidates.reject': 'Ignore',
   'memory.candidates.saveFirst': 'Save the edited committed memory above before accepting a candidate.',
+  'memory.candidates.mergeSuggestion': 'Suggested merge result (after acceptance)',
   'memory.candidates.source.manual': 'Manual',
   'memory.candidates.source.session': 'Session',
   'memory.candidates.source.mission': 'Mission',
@@ -205,6 +207,6 @@ export const en = {
   'memory.candidates.relation.conflict': 'Possible conflict',
   'memory.candidates.relationHelp.new': 'This section has no committed content yet; accepting adds the first memory entry.',
   'memory.candidates.relationHelp.duplicate': 'The same content is already committed; accepting only clears this duplicate candidate.',
-  'memory.candidates.relationHelp.merge': 'This section already contains other content; accepting appends without overwriting it.',
+  'memory.candidates.relationHelp.merge': 'This section already contains other content; the full post-acceptance merge result is shown below without overwriting existing memory.',
   'memory.candidates.relationHelp.conflict': 'This candidate may replace or conflict with existing content; accepting still only appends and never overwrites automatically.',
 } satisfies Record<WorkspaceKey, string>
