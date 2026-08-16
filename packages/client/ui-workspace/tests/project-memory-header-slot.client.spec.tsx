@@ -22,7 +22,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const SESSION_ID = 'session-slot-test'
 const WORKSPACE_ID = 'workspace-slot-test'
 
-interface RootFrameProps extends PropsRenderSlots<'spec.project-memory.session'> {
+type RootFrameProps = PropsRenderSlots<'spec.project-memory.session'> & {
   SessionProvider: ComponentType<{
     empty?: (() => ReactNode) | undefined
     children: (sessionId: string) => ReactNode
