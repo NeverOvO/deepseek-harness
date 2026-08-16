@@ -46,7 +46,20 @@ async function mount(): Promise<Bench> {
     },
   }
   const listeners = new Map<string, Set<RemoteEventListener>>()
+  const commands = fakeRemote().commands
+  // Runtime reads generated namespaces both from DI (`remote.projectMemory`)
+  // and from the root Remote service (`ctx.remote.projectMemory`). Keep this
+  // double shaped like production so the forwarded-event refresh path reaches
+  // the same ProjectMemoryRemote instance instead of an undefined property.
+  const projectMemory = {
+    listCandidates: async () => ({
+      ok: true,
+      value: { ok: true, value: { memory: null, candidates: [] } },
+    }),
+  }
   const remote = {
+    commands,
+    projectMemory,
     $on(event: string, listener: RemoteEventListener) {
       let bucket = listeners.get(event)
       if (bucket === undefined) {
@@ -62,16 +75,8 @@ async function mount(): Promise<Bench> {
   }
   ctx.reflect.provide('connection', handle)
   ctx.reflect.provide('remote', remote as never)
-  ctx.reflect.provide('remote.commands', fakeRemote().commands)
-  // Runtime now owns the Project Memory cache as a first-class Workbench
-  // service. The fake returns an authoritative empty review queue so forwarded
-  // Host invalidations can exercise the real controller refresh path.
-  ctx.reflect.provide('remote.projectMemory', {
-    listCandidates: async () => ({
-      ok: true,
-      value: { ok: true, value: { memory: null, candidates: [] } },
-    }),
-  } as never)
+  ctx.reflect.provide('remote.commands', commands)
+  ctx.reflect.provide('remote.projectMemory', projectMemory as never)
   await ctx.plugin(RuntimeClient).await()
   return bench
 }
