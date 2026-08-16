@@ -158,23 +158,17 @@ describe('ui-workspace apply', () => {
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
   })
 
-  it('derives the Project Memory action from the Session Workspace account', async () => {
+  it('injects only the Project Memory controller lookup; Session membership stays on the renderer standard seat', async () => {
     const b = await bench()
     declare(b.slots, 'conversation.session.header.actions')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('conversation.session.header.actions')[0]!
-    const injectProjectMemory = entry.inject as unknown as (sessionId: string) => ProjectMemoryHeaderInjected
-    const injected = injectProjectMemory('session')
+    const injectProjectMemory = entry.inject as unknown as () => ProjectMemoryHeaderInjected
+    const injected = injectProjectMemory()
 
-    expect(injected.hooks.projectWorkspace.getSnapshot()).toMatchObject({
-      workspaceId: 'ws',
-      title: 'Workspace',
-    })
+    expect(Object.keys(injected)).toEqual(['controllerFor'])
     expect(injected.controllerFor('ws' as never)).toBe(b.controller)
     expect(b.controllerFor).toHaveBeenCalledWith('ws')
-
-    const ungrouped = injectProjectMemory('ungrouped')
-    expect(ungrouped.hooks.projectWorkspace.getSnapshot()).toBeNull()
   })
 
   it('declares the two directory-flow holes and reports their occupancy per surface', async () => {
