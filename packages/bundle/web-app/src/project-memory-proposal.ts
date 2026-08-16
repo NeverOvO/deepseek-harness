@@ -13,7 +13,9 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-workspace/project-memory'
-import type { ProjectMemorySection } from '@deepseek-ai/dsh-workspace/project-memory-types'
+import type {
+  ProjectMemoryCandidateReviewHint, ProjectMemorySection,
+} from '@deepseek-ai/dsh-workspace/project-memory-types'
 
 /** Stable model-facing tool name. */
 export const PROJECT_MEMORY_PROPOSE_TOOL = 'project_memory_propose'
@@ -27,7 +29,10 @@ const SECTION_NAMES = [
   'definitionOfDone',
 ] as const satisfies readonly ProjectMemorySection[]
 
+const RELATIONSHIP_NAMES = ['additive', 'supersedes', 'conflicts'] as const
+
 const MAX_CANDIDATE_CHARS = 8_000
+const MAX_RATIONALE_CHARS = 2_000
 const MAX_PENDING_CANDIDATES = 100
 const SENSITIVE_PATTERNS = [
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/u,
@@ -35,7 +40,7 @@ const SENSITIVE_PATTERNS = [
   /\b(?:password|passwd|secret|token|api[_ -]?key|密码|密钥|令牌)\s*[:=]\s*["']?[^\s"']{8,}/iu,
 ] as const
 
-const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Do not stage transient progress, temporary observations, unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
+const PROPOSAL_POLICY = `Project Memory candidate policy: when the current work establishes a NEW durable project-wide fact that should guide future sessions, stage one concise candidate with \`${PROJECT_MEMORY_PROPOSE_TOOL}\`. Good candidates are stable architecture, repeatable project commands, conventions, explicit decisions, durable known issues, and definition-of-done criteria. Classify the candidate relationship as additive, supersedes, or conflicts relative to remembered Project Memory, and give a short rationale when useful. This relationship is only an advisory review hint: it never authorizes replacing committed memory. Do not stage transient progress, temporary observations, unverified guesses, secrets, credentials, personal data, one-off task details, or facts already present in Project Memory. A proposal is only pending human review; never claim it was saved or committed until the user accepts it.`
 
 /** Resolve only already-registered Workspace ownership; never create one as a tool side effect. */
 function workspaceForSession(
@@ -53,6 +58,14 @@ function containsSensitiveText(text: string): boolean {
   return SENSITIVE_PATTERNS.some(pattern => pattern.test(text))
 }
 
+function reviewHintFor(
+  relationship: typeof RELATIONSHIP_NAMES[number],
+): ProjectMemoryCandidateReviewHint {
+  if (relationship === 'supersedes') return 'supersedes'
+  if (relationship === 'conflicts') return 'conflict'
+  return 'append'
+}
+
 /**
  * Build one proposal tool bound to an already resolved Workspace and Session.
  * The binding is closure-owned rather than model input, preventing cross-workspace writes.
@@ -64,7 +77,8 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
       'Propose one durable project-wide fact for human review. Use this only for stable architecture, '
       + 'commands, conventions, decisions, known issues, or definition-of-done facts that should survive '
       + 'future sessions. Do not propose transient progress, temporary observations, secrets, credentials, '
-      + 'personal data, or one-off task details. This tool only stages a candidate; it never commits Project Memory.',
+      + 'personal data, or one-off task details. Relationship hints are advisory only. This tool only stages '
+      + 'a candidate; it never commits or replaces Project Memory.',
     parameters: {
       section: {
         type: 'string',
@@ -76,6 +90,16 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
         type: 'string',
         required: true,
         description: 'A concise self-contained durable fact. Do not include secrets or transient task progress.',
+      },
+      relationship: {
+        type: 'string',
+        enum: RELATIONSHIP_NAMES,
+        required: true,
+        description: 'Advisory relationship to remembered Project Memory: additive, supersedes, or conflicts. This never authorizes replacement.',
+      },
+      rationale: {
+        type: 'string',
+        description: 'Optional concise reason for the relationship classification. Never include secrets or personal data.',
       },
     },
     output: {
@@ -95,11 +119,15 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
     },
     async execute(args) {
       const text = args.text.trim()
+      const rationale = args.rationale?.trim() ?? null
       if (text.length === 0) throw new Error('Project Memory candidate text must not be empty')
       if (text.length > MAX_CANDIDATE_CHARS) {
         throw new Error(`Project Memory candidate text exceeds ${String(MAX_CANDIDATE_CHARS)} characters`)
       }
-      if (containsSensitiveText(text)) {
+      if (rationale !== null && rationale.length > MAX_RATIONALE_CHARS) {
+        throw new Error(`Project Memory candidate rationale exceeds ${String(MAX_RATIONALE_CHARS)} characters`)
+      }
+      if (containsSensitiveText(text) || (rationale !== null && containsSensitiveText(rationale))) {
         throw new Error('Project Memory candidate looks like it contains a credential or secret')
       }
       if (ctx.projectMemory.candidates(workspaceId).length >= MAX_PENDING_CANDIDATES) {
@@ -111,6 +139,8 @@ function proposalTool(ctx: Context, workspaceId: WorkspaceId, sessionId: string)
         text,
         'automatic',
         sessionId,
+        reviewHintFor(args.relationship),
+        rationale,
       )
       return {
         candidateId: candidate.id,
@@ -158,6 +188,7 @@ export const internals = Object.freeze({
   proposalPolicy: PROPOSAL_POLICY,
   installCandidateChangeBridge,
   containsSensitiveText,
+  reviewHintFor,
 })
 
 /**
