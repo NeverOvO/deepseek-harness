@@ -43,7 +43,10 @@ export function ConversationRoot({
   const pickerAnchor = useRef<HTMLButtonElement>(null)
 
   const chooseMode = useCallback((mode: YanamiMode): void => {
-    if (switchYanamiMode === undefined || switchingMode !== undefined || yanamiMode?.mode === mode) return
+    if (yanamiMode?.available !== true
+      || switchYanamiMode === undefined
+      || switchingMode !== undefined
+      || yanamiMode.mode === mode) return
     setSwitchingMode(mode)
     setModeError(undefined)
     void switchYanamiMode(mode).then((matched) => {
@@ -53,7 +56,7 @@ export function ConversationRoot({
     }).finally(() => {
       setSwitchingMode(undefined)
     })
-  }, [switchYanamiMode, switchingMode, yanamiMode?.mode])
+  }, [switchYanamiMode, switchingMode, yanamiMode?.available, yanamiMode?.mode])
 
   // Publishes the seat's live height as --dsh-composer-height on the scroll
   // body so floating controls (ChatView back-to-bottom) clear the composer as
@@ -187,10 +190,10 @@ export function ConversationRoot({
           t={t}
           sessionCount={sessionCount}
           {...cwd === undefined ? {} : { cwd }}
-          {...yanamiMode?.mode === undefined ? {} : { activeMode: yanamiMode.mode }}
+          {...yanamiMode?.available !== true ? {} : { activeMode: yanamiMode.mode }}
           {...switchingMode === undefined ? {} : { switchingMode }}
           {...modeError === undefined ? {} : { modeError }}
-          {...switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
+          {...yanamiMode?.available !== true || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
           {...goal === undefined ? {} : { mission: goal }}
         />
       )}
