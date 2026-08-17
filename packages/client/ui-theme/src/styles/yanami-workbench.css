@@ -1,53 +1,54 @@
 /* Yanami Workbench visual layer.
  *
- * The light palette is intentionally airy and sunlit: navy text, sky-blue
- * accents, translucent white surfaces, and restrained lemon highlights. The
- * dark palette keeps the same identity as a night-study variant so existing
- * appearance preferences remain usable.
+ * Light is the product's primary visual baseline: airy daylight, navy text,
+ * soft sky-blue structure, translucent white surfaces, restrained mint, and
+ * lemon highlights. Dark remains a fully supported night-study variant rather
+ * than driving the visual direction of new workbench surfaces.
  */
 body {
-  --dsw-alias-bg-base: rgb(246, 251, 255);
-  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.82);
-  --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.72);
-  --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.9);
-  --dsw-alias-bg-module-platform: rgba(244, 249, 255, 0.78);
-  --dsw-alias-bg-overlay: rgba(250, 253, 255, 0.94);
-  --dsw-alias-border-l1: rgba(77, 132, 187, 0.11);
-  --dsw-alias-border-l2: rgba(64, 118, 172, 0.18);
-  --dsw-alias-border-l2-darkmode-thin: rgba(64, 118, 172, 0.18);
-  --dsw-alias-border-l3: rgba(48, 104, 160, 0.26);
-  --dsw-alias-border-l4: rgba(37, 87, 139, 0.34);
-  --dsw-alias-brand-primary: rgb(39, 93, 157);
+  --dsw-alias-bg-base: rgb(249, 253, 255);
+  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.9);
+  --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.82);
+  --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.94);
+  --dsw-alias-bg-module-platform: rgba(247, 251, 255, 0.84);
+  --dsw-alias-bg-overlay: rgba(252, 254, 255, 0.96);
+  --dsw-alias-border-l1: rgba(77, 132, 187, 0.09);
+  --dsw-alias-border-l2: rgba(64, 118, 172, 0.16);
+  --dsw-alias-border-l2-darkmode-thin: rgba(64, 118, 172, 0.16);
+  --dsw-alias-border-l3: rgba(48, 104, 160, 0.24);
+  --dsw-alias-border-l4: rgba(37, 87, 139, 0.32);
+  --dsw-alias-brand-primary: rgb(43, 99, 166);
   --dsw-alias-brand-primary-invert: rgb(255, 255, 255);
-  --dsw-alias-brand-primary-new-colorprimary-new-color: rgb(70, 137, 225);
-  --dsw-alias-brand-text: rgb(39, 93, 157);
-  --dsw-alias-label-primary: rgb(38, 66, 97);
-  --dsw-alias-label-secondary: rgb(91, 119, 150);
-  --dsw-alias-label-tertiary: rgb(133, 154, 177);
-  --dsw-alias-button-elevated-fill: rgba(255, 255, 255, 0.8);
-  --dsw-alias-button-floating-fill: rgba(255, 255, 255, 0.88);
-  --dsw-alias-button-floating-hover: rgba(225, 240, 255, 0.86);
+  --dsw-alias-brand-primary-new-colorprimary-new-color: rgb(78, 145, 229);
+  --dsw-alias-brand-text: rgb(43, 99, 166);
+  --dsw-alias-label-primary: rgb(45, 76, 108);
+  --dsw-alias-label-secondary: rgb(101, 129, 158);
+  --dsw-alias-label-tertiary: rgb(145, 166, 187);
+  --dsw-alias-button-elevated-fill: rgba(255, 255, 255, 0.88);
+  --dsw-alias-button-floating-fill: rgba(255, 255, 255, 0.94);
+  --dsw-alias-button-floating-hover: rgba(226, 241, 255, 0.92);
   --dsw-alias-button-info-fill: rgb(78, 143, 226);
   --dsw-alias-button-info-hover: rgb(61, 127, 214);
-  --dsw-alias-interactive-bg-hover: rgba(92, 158, 230, 0.1);
-  --dsw-alias-interactive-bg-selected: rgba(74, 142, 225, 0.14);
-  --dsw-specific-sidebar-fill: rgba(247, 252, 255, 0.76);
+  --dsw-alias-interactive-bg-hover: rgba(92, 158, 230, 0.09);
+  --dsw-alias-interactive-bg-selected: rgba(74, 142, 225, 0.13);
+  --dsw-specific-sidebar-fill: rgba(250, 253, 255, 0.86);
 
-  --dsw-alias-yanami-navy: rgb(36, 75, 117);
-  --dsw-alias-yanami-blue: rgb(75, 143, 226);
-  --dsw-alias-yanami-sky: rgb(188, 224, 249);
-  --dsw-alias-yanami-mint: rgb(119, 201, 189);
-  --dsw-alias-yanami-lemon: rgb(244, 194, 72);
-  --dsw-alias-yanami-lemon-soft: rgba(255, 231, 151, 0.34);
-  --dsw-alias-yanami-glass-fill: rgba(255, 255, 255, 0.68);
-  --dsw-alias-yanami-glass-fill-strong: rgba(255, 255, 255, 0.84);
-  --dsw-alias-yanami-glass-border: rgba(83, 139, 191, 0.17);
-  --dsw-alias-yanami-glass-shadow: 0 14px 44px rgba(65, 114, 158, 0.12);
-  --dsw-alias-yanami-card-shadow: 0 8px 26px rgba(72, 121, 163, 0.09);
+  --dsw-alias-yanami-navy: rgb(42, 80, 122);
+  --dsw-alias-yanami-blue: rgb(82, 149, 229);
+  --dsw-alias-yanami-sky: rgb(202, 231, 250);
+  --dsw-alias-yanami-mint: rgb(120, 202, 190);
+  --dsw-alias-yanami-lemon: rgb(246, 197, 76);
+  --dsw-alias-yanami-lemon-soft: rgba(255, 230, 148, 0.3);
+  --dsw-alias-yanami-glass-fill: rgba(255, 255, 255, 0.74);
+  --dsw-alias-yanami-glass-fill-strong: rgba(255, 255, 255, 0.9);
+  --dsw-alias-yanami-glass-border: rgba(83, 139, 191, 0.15);
+  --dsw-alias-yanami-glass-shadow: 0 16px 48px rgba(72, 121, 163, 0.1);
+  --dsw-alias-yanami-card-shadow: 0 8px 24px rgba(72, 121, 163, 0.075);
   --dsw-alias-yanami-workbench-bg:
-    radial-gradient(circle at 82% 8%, rgba(255, 222, 119, 0.2), transparent 23%),
-    radial-gradient(circle at 12% 92%, rgba(120, 202, 190, 0.12), transparent 30%),
-    linear-gradient(145deg, rgba(237, 248, 255, 0.98) 0%, rgba(250, 253, 255, 0.98) 43%, rgba(242, 250, 248, 0.98) 100%);
+    radial-gradient(circle at 82% 3%, rgba(255, 222, 119, 0.22), transparent 24%),
+    radial-gradient(circle at 16% 4%, rgba(178, 220, 249, 0.2), transparent 31%),
+    radial-gradient(circle at 8% 92%, rgba(120, 202, 190, 0.11), transparent 31%),
+    linear-gradient(145deg, rgb(242, 250, 255) 0%, rgb(253, 254, 255) 46%, rgb(245, 252, 250) 100%);
 }
 
 body[data-ds-dark-theme] {
