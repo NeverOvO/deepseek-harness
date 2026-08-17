@@ -3,9 +3,9 @@
 .root {
   position: relative;
   display: block;
-  width: min(1040px, calc(100vw - 360px));
-  max-width: calc(100vw - 104px);
-  margin: -10px 50% 0;
+  width: min(1000px, calc(100vw - 380px));
+  max-width: calc(100vw - 112px);
+  margin: -6px 50% 0;
   transform: translateX(-50%);
 }
 
@@ -15,9 +15,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  max-width: min(100%, 340px);
-  min-height: 29px;
-  padding: 0 10px;
+  max-width: min(100%, 330px);
+  min-height: 28px;
+  padding: 0 9px;
   border: 1px solid var(--dsw-alias-yanami-glass-border);
   border-radius: 999px;
   background: var(--dsw-alias-yanami-glass-fill-strong);
@@ -59,10 +59,10 @@
 .modalInput {
   box-sizing: border-box;
   width: 100%;
-  height: 44px;
-  padding: 7px 14px;
+  height: 42px;
+  padding: 7px 13px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 22px;
+  border-radius: 21px;
   outline: none;
   background: transparent;
   font-size: 14px;
@@ -80,7 +80,7 @@
 }
 
 .modalAction {
-  min-width: 72px;
+  min-width: 68px;
 }
 
 .modalError {
@@ -92,13 +92,13 @@
 
 @media (max-width: 1260px) {
   .root {
-    width: min(960px, calc(100vw - 300px));
+    width: min(930px, calc(100vw - 310px));
   }
 }
 
 @media (max-width: 1080px) {
   .root {
-    width: min(880px, calc(100vw - 220px));
+    width: min(850px, calc(100vw - 230px));
   }
 }
 
