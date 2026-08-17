@@ -248,9 +248,10 @@ async function main() {
     overwrite: true,
     asar: false,
     // `pnpm deploy --prod` already produced the complete portable production
-    // dependency tree. Packager must not reinterpret/prune pnpm's deploy graph.
+    // dependency tree. Preserve its relative links: dereferencing the cyclic
+    // pnpm graph recursively expands package links until macOS hits ENAMETOOLONG.
     prune: false,
-    derefSymlinks: true,
+    derefSymlinks: false,
     extraResource: [nodeRuntime],
     appBundleId: BUNDLE_ID,
     appCategoryType: 'public.app-category.developer-tools',
