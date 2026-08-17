@@ -28,8 +28,13 @@
 .header {
   position: relative;
   flex: none;
-  padding: 12px 28px 0 20px;
+  padding: 13px 30px 0 22px;
   border-bottom: 1px solid transparent;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 34%, transparent),
+    transparent 88%
+  );
 }
 
 .header::after {
@@ -40,7 +45,7 @@
   left: 0;
   z-index: 0;
   height: 1px;
-  background: var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-border-l2) 84%, transparent);
   pointer-events: none;
 }
 
@@ -54,14 +59,14 @@
   display: flex;
   align-items: center;
   gap: 0;
-  min-height: 32px;
+  min-height: 34px;
 }
 
 .titleCluster {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -93,7 +98,7 @@
   overflow: hidden;
   padding: 4px 8px;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
   font-size: 14px;
   line-height: 20px;
@@ -101,15 +106,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .crumb:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .crumbCurrent {
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  color: var(--dsw-alias-yanami-navy);
   cursor: default;
 }
 
@@ -117,35 +124,35 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .headerUtilities {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
-  margin-left: 20px;
+  gap: 7px;
+  margin-left: 18px;
 }
 
 .headerUtilities:empty {
   display: none;
 }
 
-/* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned. */
+/* Keep the tab strip compact and calm: active state carries the Yanami blue
+   while the inactive tabs recede into the header surface. */
 .tabs {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 36px;
-  margin-top: 4px;
-  padding-left: 8px;
+  gap: 28px;
+  margin-top: 3px;
+  padding-left: 6px;
 }
 
-/* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500), gap 8 to the 2px bar. */
 .tab {
   position: relative;
-  padding: 0 0 11px;
+  padding: 0 0 10px;
   border: none;
   background: transparent;
   font-size: 13px;
@@ -153,6 +160,11 @@
   font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.tab:hover {
+  color: var(--dsw-alias-label-primary);
 }
 
 .tab::after {
