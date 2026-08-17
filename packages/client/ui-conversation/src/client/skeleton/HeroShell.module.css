@@ -5,7 +5,10 @@
   display: block;
   width: min(1000px, calc(100vw - 380px));
   max-width: calc(100vw - 112px);
-  margin: 2px 50% 6px;
+  /* Keep the blank-session dashboard visually detached from the window chrome.
+     The asymmetric top margin deliberately places the workbench a little lower
+     without scaling any of its cards or controls. */
+  margin: 18px 50% 6px;
   transform: translateX(-50%);
 }
 
@@ -88,6 +91,12 @@
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-state-error-primary);
+}
+
+@media (max-height: 780px) and (min-width: 761px) {
+  .root {
+    margin-top: 12px;
+  }
 }
 
 @media (max-width: 1260px) {
