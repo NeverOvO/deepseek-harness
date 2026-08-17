@@ -3,12 +3,28 @@
 // cannot leave sticky page controls above the mask. This is still an in-page
 // WebUI dialog; it never creates or targets another browser/native window.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCloseOutline16 } from './icons/index.tsx'
 import css from './Modal.module.css'
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function focusableChildren(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(element => (
+    element.getAttribute('aria-hidden') !== 'true'
+    && element.hidden !== true
+  ))
+}
 
 /**
  * Render a centered modal over a blurred page mask.
@@ -22,9 +38,7 @@ import css from './Modal.module.css'
  * @param props.contentClassName - optional class for a scrollable content region.
  * @param props.headless - render children directly in the card (no default
  * header/close/body chrome) for dialogs whose figma frame owns its own
- * header structure; mask, card, Escape, and aria-label remain.
- * @param props.closeLabel - close-button aria label; the owner passes
- * localized copy (this package is cordis-free, so copy arrives via props).
+ * header structure; mask, card, Escape, focus containment, and aria-label remain.
  * @returns null when closed; otherwise the overlay tree.
  */
 export function Modal({
@@ -41,13 +55,47 @@ export function Modal({
   contentClassName?: string
   headless?: boolean
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = dialogRef.current
+    if (dialog !== null && !dialog.contains(document.activeElement)) {
+      const first = focusableChildren(dialog)[0]
+      ;(first ?? dialog).focus({ preventScroll: true })
+    }
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const currentDialog = dialogRef.current
+      if (currentDialog === null) return
+      const focusable = focusableChildren(currentDialog)
+      if (focusable.length === 0) {
+        e.preventDefault()
+        currentDialog.focus({ preventScroll: true })
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && (document.activeElement === first || !currentDialog.contains(document.activeElement))) {
+        e.preventDefault()
+        last.focus({ preventScroll: true })
+      } else if (!e.shiftKey && (document.activeElement === last || !currentDialog.contains(document.activeElement))) {
+        e.preventDefault()
+        first.focus({ preventScroll: true })
+      }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown) }
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      if (returnFocus?.isConnected === true) returnFocus.focus({ preventScroll: true })
+    }
   }, [open, onClose])
 
   if (!open) return null
@@ -56,10 +104,12 @@ export function Modal({
     <div className={css.root} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div
+        ref={dialogRef}
         className={clsx(css.dialog, className)}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
       >
         {headless
           ? children
