@@ -108,32 +108,94 @@
   }
 }
 
+@keyframes dsh-history-state-pulse {
+  0%, 100% {
+    opacity: 0.48;
+    transform: scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .turnStatus {
     background-position: 0 0;
     background-size: 100% 100%;
     animation: none;
   }
+
+  .hint::before {
+    animation: none;
+  }
+}
+
+.hint,
+.openError {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(100%, 560px);
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 18px;
+  backdrop-filter: var(--dsw-alias-yanami-glass-blur);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--dsw-alias-yanami-blue) 6%, transparent);
 }
 
 .hint {
-  padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 7%, transparent);
-  border-radius: 10px;
-  color: var(--dsw-alias-label-tertiary);
-  background: color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 72%, transparent);
-  font-size: 12px;
-  line-height: 18px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 12%, var(--dsw-alias-border-l2));
+  color: var(--dsw-alias-label-secondary);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--dsw-alias-yanami-sky) 8%, transparent),
+      transparent 58%
+    ),
+    color-mix(in srgb, var(--dsw-alias-yanami-glass-fill-strong) 88%, transparent);
+}
+
+.hint::before,
+.openError::before {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -1px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.hint::before {
+  content: '✦';
+  color: var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-yanami-sky) 18%, transparent);
+  animation: dsh-history-state-pulse 1.4s ease-in-out infinite;
 }
 
 .openError {
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, transparent);
-  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 20%, var(--dsw-alias-border-l2));
   color: var(--dsw-alias-state-error-primary);
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 5%, transparent);
-  font-size: 12px;
-  line-height: 18px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, transparent),
+      transparent 62%
+    ),
+    color-mix(in srgb, var(--dsw-alias-yanami-glass-fill-strong) 90%, transparent);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, transparent);
+}
+
+.openError::before {
+  content: '!';
+  font-weight: 700;
+  color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
 }
 
 .older {
