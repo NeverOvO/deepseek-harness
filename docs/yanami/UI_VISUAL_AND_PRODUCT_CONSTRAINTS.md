@@ -53,7 +53,7 @@ Conversation keeps:
 
 ## 4. Layout rules
 
-Desktop is the primary surface. Optimize first for 1440–1728 px viewport widths.
+Desktop is the primary surface. Optimize first for 1440–1728 px viewport widths, but do not assume concept-art canvas height. Electron windows commonly expose only ~760–900 CSS px of usable vertical space.
 
 Spacing scale: `4 / 8 / 12 / 16 / 20 / 24 / 32 / 40`.
 
@@ -63,13 +63,17 @@ Mandatory rules:
 - primary cards use stable grid alignment and consistent internal padding;
 - major regions keep 24–32 px breathing room where space permits;
 - page content must not visually stick to window edges;
-- controls may compact responsively, but content readability has priority over preserving a multi-column layout.
+- controls may compact responsively, but content readability has priority over preserving a multi-column layout;
+- height-responsive density is required: reduce decorative mass, padding and card height before making a normal desktop window feel zoomed-in;
+- do not use `transform: scale(...)` or browser zoom as a product-layout solution; component geometry must respond natively;
+- at a normal 1440+ desktop width with ~820–900 px usable height, the blank Workbench should expose its hero, mode row, lower summary surfaces and resident composer with minimal initial scrolling when content permits.
 
 Responsive targets:
 - >= 1440: full desktop composition;
 - 1200–1439: reduce secondary decoration before reducing content width;
 - 960–1199: reduce card column count and secondary side content;
-- < 960: prefer stacked/simplified layouts.
+- < 960: prefer stacked/simplified layouts;
+- <= 900 px usable height: apply a compact desktop-density pass without shrinking typography below readable product sizes.
 
 ## 5. Card/surface system
 
@@ -95,16 +99,19 @@ Dialogs are part of the product, not implementation leftovers.
 
 - simple confirmation/info dialog: ~380–520 px;
 - ordinary form dialog: ~560–720 px;
-- complex editor (Project Memory class): ~760–960 px or a dedicated page/panel;
+- complex editor (Project Memory class): typically ~780–900 px or a dedicated page/panel;
+- settings surface: typically ~900–980 px on a large desktop, with internal content scrolling instead of occupying nearly the entire viewport;
 - complex settings must use a full-width centered settings surface or page, not a narrow sidebar-constrained floating column;
 - long editors must have a bounded internal scroll region;
 - footer actions remain visually stable and reachable;
+- normal desktop dialogs should generally stay within roughly 80–84dvh where practical; short windows may expand toward the viewport with reduced outer padding;
 - dialogs/overlays must portal to `document.body` (or equivalent root overlay host) so sidebar stacking/containment cannot clip them.
 
 ## 7. Typography and density
 
 - page title > section title > card title > body > metadata;
 - body copy should normally be 13–15 px with comfortable line-height;
+- compact summary metadata may use 10–12 px when contrast and spacing remain sufficient;
 - avoid long lines and dense microcopy walls;
 - Chinese is the primary UI language; English is secondary labeling/context;
 - English mode names may remain prominent, but must not overpower task content.
@@ -149,21 +156,22 @@ Do not ship new UI that:
 
 Before considering a UI task complete, verify:
 1. 1440+ desktop layout;
-2. no text overflow or vertical compression;
-3. dialog/overlay viewport behavior;
-4. scroll ownership and footer reachability;
-5. hover/selected/focus states;
-6. light-theme visual quality;
-7. dark-theme readability (even if not visually final);
-8. consistency with the five-mode product hierarchy;
-9. consistency with Project Memory / Evidence / Mission Cockpit vocabulary;
-10. no debug-only console output remains.
+2. 760 / 820 / 900-ish usable-height behavior for large desktop widths;
+3. no text overflow or vertical compression;
+4. dialog/overlay viewport behavior;
+5. scroll ownership and footer reachability;
+6. hover/selected/focus states;
+7. light-theme visual quality;
+8. dark-theme readability (even if not visually final);
+9. consistency with the five-mode product hierarchy;
+10. consistency with Project Memory / Evidence / Mission Cockpit vocabulary;
+11. no debug-only console output remains.
 
 ## 12. Direction of travel
 
 Near-term priority is not a one-shot redesign. Improve in controlled passes:
 1. eliminate broken/clipped layouts;
 2. normalize dialog and settings surfaces;
-3. normalize cards and spacing;
+3. normalize desktop scale, cards and spacing;
 4. migrate the workbench toward the approved airy light visual system;
 5. then add refined illustration, motion and secondary polish.
