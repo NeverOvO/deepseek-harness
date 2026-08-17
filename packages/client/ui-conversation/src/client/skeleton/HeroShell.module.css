@@ -5,7 +5,7 @@
   display: block;
   width: min(1000px, calc(100vw - 380px));
   max-width: calc(100vw - 112px);
-  margin: -6px 50% 0;
+  margin: 2px 50% 6px;
   transform: translateX(-50%);
 }
 
