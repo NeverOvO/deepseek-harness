@@ -3,6 +3,15 @@ import type { GoalProjection } from '@deepseek-ai/dsh-goal/client'
 import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import css from './YanamiHome.module.css'
 
+export type YanamiRecentSessionStatus = 'attention' | 'running' | 'completed' | 'idle'
+
+/** Plain Home-facing view model; durable Session/Workspace projection stays outside the component. */
+export interface YanamiRecentSession {
+  id: string
+  title: string
+  status: YanamiRecentSessionStatus
+}
+
 export interface YanamiHomeProps {
   cwd?: string
   sessionCount?: number
@@ -12,6 +21,7 @@ export interface YanamiHomeProps {
   onModeSelect?: (mode: YanamiMode) => void
   mission?: GoalProjection | null
   projectMemory?: ReactNode
+  recentSessions?: readonly YanamiRecentSession[]
 }
 
 const MODES = [
@@ -57,9 +67,19 @@ function missionPhaseLabel(mission?: GoalProjection | null): string {
   }
 }
 
+function recentStatusLabel(status: YanamiRecentSessionStatus): string {
+  switch (status) {
+    case 'attention': return '需要确认'
+    case 'running': return '进行中'
+    case 'completed': return '已完成'
+    case 'idle': return '最近更新'
+  }
+}
+
 /** Blank-session landing surface for Yanami Workbench. */
 export function YanamiHome({
   cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect, mission, projectMemory,
+  recentSessions,
 }: YanamiHomeProps = {}) {
   const project = projectName(cwd)
   const modeEnabled = onModeSelect !== undefined
@@ -228,13 +248,33 @@ export function YanamiHome({
           <p>完成不是一句“已完成”，而是一组可复核的验证证据。</p>
         </article>
 
-        <article className={css.panelAccent} data-tone="lemon">
-          <div className={css.notePaper}>
-            <small>今日小记</small>
-            <strong>复杂的问题，<br />也可以拆成简单的阶段。</strong>
-            <span>♡</span>
+        <article className={css.panel} data-tone="lemon">
+          <div className={css.panelTitle}>
+            <span className={css.panelIcon}>↻</span>
+            <div><strong>最近工作</strong><small>Recent Work</small></div>
+            {recentSessions !== undefined && (
+              <span className={css.phaseTag}>{recentSessions.length} 条</span>
+            )}
           </div>
-          <div className={css.citrus}>◌</div>
+          {recentSessions === undefined
+            ? <p>选择工作区后，这里会显示这个项目最近更新的会话。</p>
+            : recentSessions.length === 0
+              ? <p>这个项目还没有可恢复的历史会话。完成第一段工作后会自动出现在这里。</p>
+              : (
+                <div className={css.evidenceRows} aria-label="最近会话">
+                  {recentSessions.map(session => [
+                    <span key={`${session.id}-title`} title={session.title}>{session.title}</span>,
+                    <b key={`${session.id}-status`}>{recentStatusLabel(session.status)}</b>,
+                  ])}
+                </div>
+              )}
+          <div className={css.panelFoot}>
+            {recentSessions === undefined
+              ? '按 Workspace 聚合真实会话'
+              : recentSessions.length === 0
+                ? '暂无历史工作'
+                : `按更新时间显示最近 ${recentSessions.length} 个会话`}
+          </div>
         </article>
       </section>
     </section>

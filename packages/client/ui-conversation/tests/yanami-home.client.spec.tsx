@@ -106,4 +106,25 @@ describe('YanamiHome Mission cockpit', () => {
     expect(view.getByText('Architecture')).toBeTruthy()
     expect(view.getByText(/后续绑定 Workspace 级长期记忆/)).toBeTruthy()
   })
+
+  it('renders real recent-session summaries supplied by the Workspace projection', () => {
+    const view = render(<YanamiHome recentSessions={[
+      { id: 'review', title: '复核发布候选', status: 'attention' },
+      { id: 'build', title: '修复桌面打包', status: 'running' },
+      { id: 'memory', title: '项目记忆接入', status: 'completed' },
+    ]} />)
+
+    expect(view.getByText('复核发布候选')).toBeTruthy()
+    expect(view.getByText('需要确认')).toBeTruthy()
+    expect(view.getByText('修复桌面打包')).toBeTruthy()
+    expect(view.getByText('项目记忆接入')).toBeTruthy()
+    expect(view.getByText('按更新时间显示最近 3 个会话')).toBeTruthy()
+  })
+
+  it('shows a settled recent-work empty state for a selected Workspace', () => {
+    const view = render(<YanamiHome recentSessions={[]} />)
+
+    expect(view.getByText(/还没有可恢复的历史会话/)).toBeTruthy()
+    expect(view.getByText('暂无历史工作')).toBeTruthy()
+  })
 })

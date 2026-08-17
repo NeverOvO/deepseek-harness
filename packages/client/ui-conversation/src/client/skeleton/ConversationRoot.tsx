@@ -7,6 +7,7 @@ import clsx from 'clsx'
 import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
+import { recentWorkspaceSessions } from '../chat/recent-work.ts'
 import { HeroGlow, HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
 import css from './ConversationRoot.module.css'
 
@@ -30,6 +31,7 @@ export function ConversationRoot({
   const agentPreset = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.agentPreset)
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
   const sessionCount = useSessions(s => Object.keys(s.byId).length)
+  const sessionRows = useSessions(s => s.byId)
   const workspaces = useWorkspaces(s => s)
   const yanamiMode = useProjection('yanamiMode')
   const goal = useProjection('goal')
@@ -85,6 +87,10 @@ export function ConversationRoot({
   const pendingWorkspace = workspaces.items.find(
     workspace => workspace.workspaceId === pendingWorkspaceId,
   )
+  const recentWorkspace = pendingWorkspace ?? sessionWorkspace
+  const recentSessions = recentWorkspace === undefined
+    ? undefined
+    : recentWorkspaceSessions(recentWorkspace.sessionIds, sessionRows)
 
   // Clear the pending pick once the session lands in it, or when the picked
   // workspace disappears from a ready list (deleted from the sidebar).
@@ -201,6 +207,7 @@ export function ConversationRoot({
           {...modeError === undefined ? {} : { modeError }}
           {...!yanamiModeAvailable || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
           {...goal === undefined ? {} : { mission: goal }}
+          {...recentSessions === undefined ? {} : { recentSessions }}
         >
           {heroWorkspaceSurface}
         </HeroShell>

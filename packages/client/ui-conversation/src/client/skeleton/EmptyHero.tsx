@@ -12,6 +12,7 @@ import type { GoalProjection } from '@deepseek-ai/dsh-goal/client'
 import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import type { ConversationSlotProps } from '../contract/slots.ts'
 import { YanamiHome } from '../chat/YanamiHome.tsx'
+import type { YanamiRecentSession } from '../chat/YanamiHome.tsx'
 import css from './HeroShell.module.css'
 
 /** The owner's locale seat type, passed to hero chrome as a plain prop. */
@@ -90,6 +91,7 @@ export interface HeroShellProps {
   modeError?: string
   onModeSelect?: (mode: YanamiMode) => void
   mission?: GoalProjection | null
+  recentSessions?: readonly YanamiRecentSession[]
 }
 
 /**
@@ -100,6 +102,7 @@ export interface HeroShellProps {
  */
 export function HeroShell({
   children, cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect, mission,
+  recentSessions,
 }: HeroShellProps) {
   return (
     <div className={css.root}>
@@ -111,6 +114,7 @@ export function HeroShell({
         {...modeError === undefined ? {} : { modeError }}
         {...onModeSelect === undefined ? {} : { onModeSelect }}
         {...mission === undefined ? {} : { mission }}
+        {...recentSessions === undefined ? {} : { recentSessions }}
         projectMemory={children}
       />
     </div>
