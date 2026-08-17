@@ -7,16 +7,16 @@
  */
 body {
   --dsw-alias-bg-base: rgb(249, 253, 255);
-  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.9);
-  --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.82);
-  --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.94);
-  --dsw-alias-bg-module-platform: rgba(247, 251, 255, 0.84);
-  --dsw-alias-bg-overlay: rgba(252, 254, 255, 0.96);
-  --dsw-alias-border-l1: rgba(77, 132, 187, 0.09);
-  --dsw-alias-border-l2: rgba(64, 118, 172, 0.16);
-  --dsw-alias-border-l2-darkmode-thin: rgba(64, 118, 172, 0.16);
-  --dsw-alias-border-l3: rgba(48, 104, 160, 0.24);
-  --dsw-alias-border-l4: rgba(37, 87, 139, 0.32);
+  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.92);
+  --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.84);
+  --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.96);
+  --dsw-alias-bg-module-platform: rgba(247, 251, 255, 0.86);
+  --dsw-alias-bg-overlay: rgba(252, 254, 255, 0.97);
+  --dsw-alias-border-l1: rgba(77, 132, 187, 0.08);
+  --dsw-alias-border-l2: rgba(64, 118, 172, 0.15);
+  --dsw-alias-border-l2-darkmode-thin: rgba(64, 118, 172, 0.14);
+  --dsw-alias-border-l3: rgba(48, 104, 160, 0.23);
+  --dsw-alias-border-l4: rgba(37, 87, 139, 0.31);
   --dsw-alias-brand-primary: rgb(43, 99, 166);
   --dsw-alias-brand-primary-invert: rgb(255, 255, 255);
   --dsw-alias-brand-primary-new-colorprimary-new-color: rgb(78, 145, 229);
@@ -24,14 +24,22 @@ body {
   --dsw-alias-label-primary: rgb(45, 76, 108);
   --dsw-alias-label-secondary: rgb(101, 129, 158);
   --dsw-alias-label-tertiary: rgb(145, 166, 187);
-  --dsw-alias-button-elevated-fill: rgba(255, 255, 255, 0.88);
-  --dsw-alias-button-floating-fill: rgba(255, 255, 255, 0.94);
-  --dsw-alias-button-floating-hover: rgba(226, 241, 255, 0.92);
+  --dsw-alias-button-elevated-fill: rgba(255, 255, 255, 0.9);
+  --dsw-alias-button-floating-fill: rgba(255, 255, 255, 0.96);
+  --dsw-alias-button-floating-hover: rgba(226, 241, 255, 0.94);
   --dsw-alias-button-info-fill: rgb(78, 143, 226);
   --dsw-alias-button-info-hover: rgb(61, 127, 214);
-  --dsw-alias-interactive-bg-hover: rgba(92, 158, 230, 0.09);
-  --dsw-alias-interactive-bg-selected: rgba(74, 142, 225, 0.13);
-  --dsw-specific-sidebar-fill: rgba(250, 253, 255, 0.86);
+  --dsw-alias-interactive-bg-hover: rgba(92, 158, 230, 0.085);
+  --dsw-alias-interactive-bg-selected: rgba(74, 142, 225, 0.125);
+
+  /* Product-specific surfaces are normalized here instead of page-local
+     one-offs. This is what makes the sidebar, composer, settings and menus
+     feel like one Workbench rather than separate plugins. */
+  --dsw-specific-sidebar-fill: rgba(250, 253, 255, 0.9);
+  --dsw-specific-sidebar-nav-item-hover: rgba(111, 176, 236, 0.08);
+  --dsw-specific-sidebar-nav-item-active: rgba(105, 171, 235, 0.14);
+  --dsw-specific-input-major: rgba(255, 255, 255, 0.93);
+  --dsw-specific-selector: rgba(229, 242, 253, 0.82);
 
   --dsw-alias-yanami-navy: rgb(42, 80, 122);
   --dsw-alias-yanami-blue: rgb(82, 149, 229);
@@ -39,11 +47,11 @@ body {
   --dsw-alias-yanami-mint: rgb(120, 202, 190);
   --dsw-alias-yanami-lemon: rgb(246, 197, 76);
   --dsw-alias-yanami-lemon-soft: rgba(255, 230, 148, 0.3);
-  --dsw-alias-yanami-glass-fill: rgba(255, 255, 255, 0.74);
-  --dsw-alias-yanami-glass-fill-strong: rgba(255, 255, 255, 0.9);
-  --dsw-alias-yanami-glass-border: rgba(83, 139, 191, 0.15);
-  --dsw-alias-yanami-glass-shadow: 0 16px 48px rgba(72, 121, 163, 0.1);
-  --dsw-alias-yanami-card-shadow: 0 8px 24px rgba(72, 121, 163, 0.075);
+  --dsw-alias-yanami-glass-fill: rgba(255, 255, 255, 0.76);
+  --dsw-alias-yanami-glass-fill-strong: rgba(255, 255, 255, 0.92);
+  --dsw-alias-yanami-glass-border: rgba(83, 139, 191, 0.14);
+  --dsw-alias-yanami-glass-shadow: 0 16px 48px rgba(72, 121, 163, 0.095);
+  --dsw-alias-yanami-card-shadow: 0 8px 24px rgba(72, 121, 163, 0.07);
   --dsw-alias-yanami-workbench-bg:
     radial-gradient(circle at 82% 3%, rgba(255, 222, 119, 0.22), transparent 24%),
     radial-gradient(circle at 16% 4%, rgba(178, 220, 249, 0.2), transparent 31%),
@@ -77,7 +85,11 @@ body[data-ds-dark-theme] {
   --dsw-alias-button-info-hover: rgb(96, 158, 236);
   --dsw-alias-interactive-bg-hover: rgba(111, 174, 246, 0.12);
   --dsw-alias-interactive-bg-selected: rgba(111, 174, 246, 0.18);
-  --dsw-specific-sidebar-fill: rgba(17, 32, 49, 0.78);
+  --dsw-specific-sidebar-fill: rgba(17, 32, 49, 0.8);
+  --dsw-specific-sidebar-nav-item-hover: rgba(111, 174, 246, 0.1);
+  --dsw-specific-sidebar-nav-item-active: rgba(111, 174, 246, 0.16);
+  --dsw-specific-input-major: rgba(27, 45, 65, 0.94);
+  --dsw-specific-selector: rgba(43, 67, 91, 0.86);
 
   --dsw-alias-yanami-navy: rgb(204, 225, 247);
   --dsw-alias-yanami-blue: rgb(111, 174, 246);
