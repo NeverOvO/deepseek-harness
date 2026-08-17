@@ -1,7 +1,8 @@
 import { spawn, execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -131,6 +132,66 @@ async function installProductionModules(appPath) {
   // dependency graph. macOS ditto preserves the deployed links as links, so the
   // portable pnpm tree stays finite and Node resolves it exactly as deployed.
   await run('ditto', [source, destination])
+}
+
+async function findPackageRoot(entryPath, packageName) {
+  let cursor = dirname(entryPath)
+  while (true) {
+    const manifestPath = join(cursor, 'package.json')
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+      if (manifest.name === packageName) return cursor
+    }
+    const parent = dirname(cursor)
+    if (parent === cursor) break
+    cursor = parent
+  }
+  throw new Error(`Could not locate package root for ${packageName} from ${entryPath}`)
+}
+
+async function resolveInstalledPackageRoot(fromDirectory, packageName) {
+  const requireFromPackage = createRequire(join(fromDirectory, 'package.json'))
+  try {
+    return dirname(requireFromPackage.resolve(`${packageName}/package.json`))
+  } catch {
+    const entryPath = requireFromPackage.resolve(packageName)
+    return findPackageRoot(entryPath, packageName)
+  }
+}
+
+async function copyPackageWithoutNodeModules(source, destination) {
+  await rm(destination, { recursive: true, force: true })
+  await mkdir(destination, { recursive: true })
+  const entries = await readdir(source, { withFileTypes: true })
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === '.git') continue
+    await cp(join(source, entry.name), join(destination, entry.name), {
+      recursive: true,
+      force: true,
+      dereference: false,
+    })
+  }
+}
+
+async function materializeLinkedRuntimeOverrides(appPath) {
+  const applicationRoot = join(appPath, 'Contents', 'Resources', 'app')
+  const nodeModules = join(applicationRoot, 'node_modules')
+  const standardSchemaRoot = await resolveInstalledPackageRoot(
+    join(repoRoot, 'vendor', 'schemastery'),
+    '@standard-schema/spec',
+  )
+  const packages = [
+    ['@deepseek-ai/cosmokit', join(repoRoot, 'vendor', 'cosmokit')],
+    ['@deepseek-ai/schemastery', join(repoRoot, 'vendor', 'schemastery')],
+    ['@standard-schema/spec', standardSchemaRoot],
+  ]
+
+  console.log('[desktop] materializing linked workspace runtime overrides')
+  for (const [packageName, source] of packages) {
+    const destination = join(nodeModules, ...packageName.split('/'))
+    await mkdir(dirname(destination), { recursive: true })
+    await copyPackageWithoutNodeModules(source, destination)
+  }
 }
 
 /**
@@ -294,6 +355,7 @@ async function main() {
   const outputDir = outputPaths[0]
   const appPath = await findAppBundle(outputDir)
   await installProductionModules(appPath)
+  await materializeLinkedRuntimeOverrides(appPath)
   await smokePackagedRuntime(appPath)
 
   const zipPath = join(outDir, `Yanami-Workbench-macos-${arch}.zip`)
