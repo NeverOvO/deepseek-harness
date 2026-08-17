@@ -1,7 +1,7 @@
 import { spawn, execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,7 @@ const repoRoot = resolve(appDir, '../..')
 const outDir = join(appDir, 'out')
 const stageRoot = join(appDir, '.stage')
 const deployDir = join(stageRoot, 'app')
+const packagerDir = join(stageRoot, 'packager-shell')
 const nodeRuntimeDir = join(stageRoot, 'node-runtime')
 
 function targetArch() {
@@ -103,6 +104,33 @@ async function preparePortableApp() {
   if (!existsSync(mainEntry)) {
     throw new Error(`Desktop deployment is missing compiled main entry: ${mainEntry}`)
   }
+}
+
+async function preparePackagerShell() {
+  console.log('[desktop] staging minimal Electron shell')
+  await mkdir(packagerDir, { recursive: true })
+  for (const entry of ['package.json', 'lib', 'assets']) {
+    const source = join(deployDir, entry)
+    if (!existsSync(source)) throw new Error(`Desktop deployment is missing ${entry}`)
+    await cp(source, join(packagerDir, entry), {
+      recursive: true,
+      force: true,
+      dereference: false,
+    })
+  }
+}
+
+async function installProductionModules(appPath) {
+  const source = join(deployDir, 'node_modules')
+  const destination = join(appPath, 'Contents', 'Resources', 'app', 'node_modules')
+  if (!existsSync(source)) throw new Error(`Desktop deployment is missing production node_modules: ${source}`)
+
+  console.log('[desktop] injecting portable production dependency graph')
+  await mkdir(dirname(destination), { recursive: true })
+  // Electron Packager's generic copier can recursively expand pnpm's linked
+  // dependency graph. macOS ditto preserves the deployed links as links, so the
+  // portable pnpm tree stays finite and Node resolves it exactly as deployed.
+  await run('ditto', [source, destination])
 }
 
 /**
@@ -234,11 +262,12 @@ async function main() {
   await mkdir(stageRoot, { recursive: true })
 
   await preparePortableApp()
+  await preparePackagerShell()
   const nodeRuntime = await prepareBundledNode(arch)
 
   console.log(`[desktop] packaging ${APP_NAME} for darwin-${arch}`)
   const outputPaths = await packager({
-    dir: deployDir,
+    dir: packagerDir,
     name: APP_NAME,
     executableName: EXECUTABLE_NAME,
     platform: 'darwin',
@@ -247,11 +276,8 @@ async function main() {
     out: outDir,
     overwrite: true,
     asar: false,
-    // `pnpm deploy --prod` already produced the complete portable production
-    // dependency tree. Preserve its relative links: dereferencing the cyclic
-    // pnpm graph recursively expands package links until macOS hits ENAMETOOLONG.
     prune: false,
-    derefSymlinks: false,
+    derefSymlinks: true,
     extraResource: [nodeRuntime],
     appBundleId: BUNDLE_ID,
     appCategoryType: 'public.app-category.developer-tools',
@@ -267,10 +293,11 @@ async function main() {
 
   const outputDir = outputPaths[0]
   const appPath = await findAppBundle(outputDir)
+  await installProductionModules(appPath)
   await smokePackagedRuntime(appPath)
 
-  const zipPath = join(outDir, `Yunyulai-Workbench-macos-${arch}.zip`)
-  const dmgPath = join(outDir, `Yunyulai-Workbench-macos-${arch}.dmg`)
+  const zipPath = join(outDir, `Yanami-Workbench-macos-${arch}.zip`)
+  const dmgPath = join(outDir, `Yanami-Workbench-macos-${arch}.dmg`)
 
   console.log(`[desktop] creating ${zipPath}`)
   await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', appPath, zipPath])
