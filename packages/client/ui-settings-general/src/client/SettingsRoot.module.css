@@ -12,8 +12,8 @@
   margin: 4px -4px 4px;
   padding: 6px 2px 6px 10px;
   box-sizing: border-box;
-  border: none;
-  border-radius: 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   background: transparent;
   cursor: pointer;
   overflow: hidden;
@@ -21,10 +21,13 @@
   font-family: inherit;
   font-size: 14px;
   line-height: 22px;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .trigger:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 10%, transparent);
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-yanami-navy);
 }
 
 .trigger.rail {
@@ -34,7 +37,7 @@
   justify-content: center;
   gap: 0;
   padding: 0;
-  border-radius: 50%;
+  border-radius: 12px;
 }
 
 .triggerLabel {
@@ -56,8 +59,8 @@
 .mask {
   position: absolute;
   inset: 0;
-  background: var(--dsw-alias-bg-mask-1);
-  backdrop-filter: var(--dsw-mask-blur);
+  background: color-mix(in srgb, var(--dsw-alias-bg-mask-1) 88%, rgba(16, 42, 68, 0.12));
+  backdrop-filter: blur(8px) saturate(0.92);
 }
 
 .panel {
@@ -69,16 +72,31 @@
   min-width: 650px;
   max-width: 100%;
   min-height: 440px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 21px;
+  border: 1px solid var(--dsw-alias-yanami-glass-border);
+  border-radius: 22px;
   overflow: hidden;
-  background: var(--dsw-alias-bg-layer-2);
-  box-shadow: var(--dsw-shadow-lv3);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 92%, transparent);
+  box-shadow:
+    0 28px 80px rgba(57, 97, 136, 0.2),
+    inset 0 1px 0 color-mix(in srgb, white 26%, transparent);
+  backdrop-filter: var(--dsw-alias-yanami-glass-blur);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+.panel::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 190px;
+  width: 180px;
+  height: 110px;
+  pointer-events: none;
+  background: radial-gradient(circle at top left, color-mix(in srgb, var(--dsw-alias-yanami-sky) 18%, transparent), transparent 70%);
+}
+
 .nav {
+  position: relative;
+  z-index: 1;
   flex: none;
   display: flex;
   flex-direction: column;
@@ -86,16 +104,18 @@
   width: 190px;
   padding: 20px 11px;
   box-sizing: border-box;
-  border-right: 1px solid var(--dsw-alias-border-l2);
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 88%, var(--dsw-alias-interactive-bg-hover));
+  border-right: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 9%, var(--dsw-alias-border-l2));
+  background:
+    linear-gradient(165deg, color-mix(in srgb, var(--dsw-specific-sidebar-fill) 96%, transparent), color-mix(in srgb, var(--dsw-alias-yanami-sky) 5%, var(--dsw-specific-sidebar-fill)));
 }
 
 .navTitle {
   padding: 0 10px;
   font-size: 16px;
   line-height: 24px;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary);
+  font-weight: 650;
+  color: var(--dsw-alias-yanami-navy);
+  letter-spacing: -0.01em;
 }
 
 .navList {
@@ -118,22 +138,34 @@
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
-  font-weight: 400;
+  font-weight: 450;
   color: var(--dsw-alias-label-primary);
   text-align: left;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
 .navCell:hover {
   background: var(--dsw-specific-sidebar-nav-item-hover);
+  color: var(--dsw-alias-yanami-navy);
 }
 
 .navCell.active {
-  border-color: var(--dsw-alias-border-l2);
-  background: var(--dsw-specific-sidebar-nav-item-active);
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, var(--dsw-alias-border-l2));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--dsw-specific-sidebar-nav-item-active) 90%, transparent), color-mix(in srgb, var(--dsw-alias-yanami-glass-fill-strong) 82%, transparent));
+  color: var(--dsw-alias-yanami-navy);
+  box-shadow:
+    inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 70%, transparent),
+    var(--dsw-alias-yanami-card-shadow);
 }
 
 .navIcon {
   flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.navCell.active .navIcon {
+  color: var(--dsw-alias-yanami-blue);
 }
 
 .navLabel {
@@ -145,11 +177,14 @@
 }
 
 .content {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--dsw-alias-bg-layer-2);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-bg-layer-2) 96%, transparent), color-mix(in srgb, var(--dsw-alias-yanami-sky) 3%, var(--dsw-alias-bg-layer-2)));
 }
 
 .header {
@@ -161,6 +196,7 @@
   min-height: 54px;
   padding: 12px 17px 7px 20px;
   box-sizing: border-box;
+  border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 7%, transparent);
 }
 
 .actions {
@@ -180,14 +216,16 @@
   width: 30px;
   height: 30px;
   padding: 0;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-secondary);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .close:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 12%, transparent);
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
@@ -196,7 +234,7 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
-  padding: 4px 22px 24px;
+  padding: 10px 22px 24px;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -210,9 +248,13 @@
   white-space: nowrap;
 }
 
-/* Height-sensitive desktop density must only shrink the shell. Never expand a
-   compact base dialog back to nearly full viewport height on short Electron
-   windows. */
+:global(body:not([data-ds-dark-theme])) .panel {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 28px 82px rgba(83, 130, 173, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
 @media (max-height: 820px) and (min-width: 681px) {
   .overlay {
     padding-block: 16px;
@@ -254,6 +296,10 @@
     padding-inline: 10px;
   }
 
+  .panel::after {
+    left: 170px;
+  }
+
   .options {
     padding-inline: 18px;
   }
@@ -275,5 +321,9 @@
   .navList {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel::after {
+    display: none;
   }
 }
