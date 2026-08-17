@@ -79,4 +79,22 @@ describe('YanamiHome Mission cockpit', () => {
     expect(view.getByRole('progressbar', { name: '任务完成度' })
       .getAttribute('aria-valuenow')).toBe('100')
   })
+
+  it('composes the Workspace-owned memory surface inside the Project Memory card', () => {
+    const view = render(
+      <YanamiHome projectMemory={<div data-testid="live-project-memory">实时项目记忆</div>} />,
+    )
+    const memoryCard = view.getByText('项目记忆').closest('article')
+    const live = view.getByTestId('live-project-memory')
+
+    expect(memoryCard?.contains(live)).toBe(true)
+    expect(view.queryByText(/后续绑定 Workspace 级长期记忆/)).toBeNull()
+  })
+
+  it('keeps a structural Project Memory fallback when the Workspace slot is absent', () => {
+    const view = render(<YanamiHome />)
+
+    expect(view.getByText('Architecture')).toBeTruthy()
+    expect(view.getByText(/后续绑定 Workspace 级长期记忆/)).toBeTruthy()
+  })
 })

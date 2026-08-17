@@ -94,8 +94,9 @@ export interface HeroShellProps {
 
 /**
  * Blank-session product home. ConversationRoot keeps workspace selection and
- * the real composer immediately below this surface, so the dashboard is
- * presentation rather than a second workflow implementation.
+ * the real composer immediately below this surface. The foreign Workspace
+ * slot content is composed into the Project Memory card rather than rendered
+ * as a second dashboard row.
  */
 export function HeroShell({
   children, cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect, mission,
@@ -110,8 +111,8 @@ export function HeroShell({
         {...modeError === undefined ? {} : { modeError }}
         {...onModeSelect === undefined ? {} : { onModeSelect }}
         {...mission === undefined ? {} : { mission }}
+        projectMemory={children}
       />
-      {children}
     </div>
   )
 }

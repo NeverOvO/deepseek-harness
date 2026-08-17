@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import type { GoalProjection } from '@deepseek-ai/dsh-goal/client'
 import type { YanamiMode } from '@deepseek-ai/dsh-plan-mode/client'
 import css from './YanamiHome.module.css'
@@ -11,6 +11,7 @@ export interface YanamiHomeProps {
   modeError?: string
   onModeSelect?: (mode: YanamiMode) => void
   mission?: GoalProjection | null
+  projectMemory?: ReactNode
 }
 
 const MODES = [
@@ -57,7 +58,7 @@ function missionPhaseLabel(mission?: GoalProjection | null): string {
 
 /** Blank-session landing surface for Yanami Workbench. */
 export function YanamiHome({
-  cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect, mission,
+  cwd, sessionCount, activeMode, switchingMode, modeError, onModeSelect, mission, projectMemory,
 }: YanamiHomeProps = {}) {
   const project = projectName(cwd)
   const modeEnabled = onModeSelect !== undefined
@@ -197,10 +198,14 @@ export function YanamiHome({
             <span className={css.panelIcon}>▱</span>
             <div><strong>项目记忆</strong><small>Project Memory</small></div>
           </div>
-          <div className={css.memoryLines}>
-            <span>Architecture</span><span>Commands</span><span>Decisions</span><span>DoD</span>
-          </div>
-          <p>后续绑定 Workspace 级长期记忆，让不同会话共享同一项目上下文。</p>
+          {projectMemory ?? (
+            <>
+              <div className={css.memoryLines}>
+                <span>Architecture</span><span>Commands</span><span>Decisions</span><span>DoD</span>
+              </div>
+              <p>后续绑定 Workspace 级长期记忆，让不同会话共享同一项目上下文。</p>
+            </>
+          )}
         </article>
 
         <article className={css.panel} data-tone="mint">

@@ -18,7 +18,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
-import { ProjectMemoryOpenPanel } from './project-memory/ProjectMemoryHeaderAction.tsx'
+import { ProjectMemoryHomeSurface } from './project-memory/ProjectMemoryHomeSurface.tsx'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -219,11 +219,11 @@ export function WorkspacePickFlow({
 
 /**
  * The conversation empty-state registration: adapts the owner share to the
- * core flow and adds one first-class Project Memory route for the selected
- * Workspace. The editor is exactly the same durable surface used by the
- * active-session header; no second cache or persistence path is introduced.
+ * core flow and projects the selected Workspace's durable Project Memory into
+ * the Home card. Status and editor use the same controller; no second cache or
+ * persistence path is introduced.
  * @param props - empty-state slot props (owner share + injected creation / memory callbacks).
- * @returns the flow element plus the selected Workspace's memory action.
+ * @returns the flow element plus the selected Workspace's live memory surface.
  */
 export function WorkspacePicker({
   open,
@@ -243,27 +243,18 @@ export function WorkspacePicker({
       ? null
       : state.items.find(item => item.workspaceId === selectedId) ?? null
   ))
-  const [memoryOpen, setMemoryOpen] = useState(false)
-
-  useEffect(() => {
-    setMemoryOpen(false)
-  }, [selectedWorkspace?.workspaceId])
 
   return (
     <>
       {selectedWorkspace !== null && (
-        <button
-          type="button"
-          className={css.memoryAction}
-          aria-expanded={memoryOpen}
-          onClick={() => {
-            onClose()
-            setMemoryOpen(value => !value)
-          }}
-        >
-          <span className={css.memoryActionIcon}>▱</span>
-          {t('memory.action')}
-        </button>
+        <ProjectMemoryHomeSurface
+          key={selectedWorkspace.workspaceId}
+          workspaceId={selectedWorkspace.workspaceId}
+          workspaceName={selectedWorkspace.title}
+          controllerFor={projectMemoryFor}
+          onBeforeOpen={onClose}
+          t={t}
+        />
       )}
       <WorkspacePickFlow
         t={t}
@@ -277,16 +268,6 @@ export function WorkspacePicker({
         onPick={onPick}
         onClose={onClose}
       />
-      {memoryOpen && selectedWorkspace !== null && (
-        <ProjectMemoryOpenPanel
-          key={selectedWorkspace.workspaceId}
-          workspaceId={selectedWorkspace.workspaceId}
-          workspaceName={selectedWorkspace.title}
-          controllerFor={projectMemoryFor}
-          onClose={() => { setMemoryOpen(false) }}
-          t={t}
-        />
-      )}
     </>
   )
 }

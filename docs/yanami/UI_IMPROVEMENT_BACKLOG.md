@@ -35,7 +35,7 @@ The home dashboard must progressively become an operational surface instead of r
 - [x] Mission Cockpit consumes the live Goal projection when a mission exists.
 - [x] Project Memory is a real Workspace-level durable editor in the conversation header, including candidate review.
 - [x] Give the Home / New Session surface a first-class route into the same durable Project Memory editor without duplicating transport or state.
-- [ ] Promote the Home Project Memory card itself into a richer status/action surface once its summary contract is defined.
+- [x] Promote the Home Project Memory card itself into a richer status/action surface; it now renders durable section coverage, pending candidate count, loading/empty/error states, retry, and the same editor action through the existing Workspace slot.
 - [ ] Replace static Evidence & Delivery placeholders with real test/build/risk evidence when the composed delivery service exposes it.
 - [ ] Add recent-task / recent-activity summaries from durable session/workspace state rather than mock counters.
 - [ ] Promote actionable smart suggestions only when they can execute or navigate to a real Workbench capability.

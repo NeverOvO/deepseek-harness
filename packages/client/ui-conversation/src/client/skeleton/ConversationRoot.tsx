@@ -128,6 +128,20 @@ export function ConversationRoot({
           ? undefined
           : workspaceLabel(cwd)))
 
+  const heroWorkspaceSurface = renderSlot('conversation.hero.workspace', {
+    open: pickerOpen,
+    anchorRef: pickerAnchor,
+    selectedId: pendingWorkspaceId ?? sessionWorkspace?.workspaceId,
+    onPick: (workspaceId) => {
+      setPickerOpen(false)
+      setPendingWorkspaceId(workspaceId)
+      void selectWorkspace(workspaceId).catch(() => {
+        setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
+      })
+    },
+    onClose: () => { setPickerOpen(false) },
+  })
+
   const heroWorkspaceRow = (
     <div className={css.heroWorkspaceRow}>
       <WorkspaceChip
@@ -137,19 +151,6 @@ export function ConversationRoot({
         onClick={() => { setPickerOpen(open => !open) }}
         t={t}
       />
-      {renderSlot('conversation.hero.workspace', {
-        open: pickerOpen,
-        anchorRef: pickerAnchor,
-        selectedId: pendingWorkspaceId ?? sessionWorkspace?.workspaceId,
-        onPick: (workspaceId) => {
-          setPickerOpen(false)
-          setPendingWorkspaceId(workspaceId)
-          void selectWorkspace(workspaceId).catch(() => {
-            setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
-          })
-        },
-        onClose: () => { setPickerOpen(false) },
-      })}
       {renderSlot('conversation.hero.agentPreset', {})}
     </div>
   )
@@ -200,7 +201,9 @@ export function ConversationRoot({
           {...modeError === undefined ? {} : { modeError }}
           {...!yanamiModeAvailable || switchYanamiMode === undefined ? {} : { onModeSelect: chooseMode }}
           {...goal === undefined ? {} : { mission: goal }}
-        />
+        >
+          {heroWorkspaceSurface}
+        </HeroShell>
       )}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}

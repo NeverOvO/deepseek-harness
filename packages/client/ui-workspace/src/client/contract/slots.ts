@@ -6,8 +6,8 @@
  *   list, workspace dialogs). It registers this package's viewing store and
  *   consumes the shell's two-fact owner share (wide / expandSidebar).
  * - WorkspacePicker fills the conversation empty-state hole (menu + error
- *   dialog shared with the browser) and exposes the selected Workspace's
- *   durable Project Memory action beside the picker.
+ *   dialog shared with the browser) and projects the selected Workspace's
+ *   durable Project Memory status/action surface into the Home dashboard.
  *
  * Each registration also declares one **directory-flow hole** (`single`
  * kind): the slot a composed picker package's client half fills with its
@@ -156,7 +156,7 @@ export type WorkspaceBrowserProps =
 export type WorkspacePickerInjected = DirectoryPickingInjected & {
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
-  /** Resolve the selected Workspace's durable Project Memory controller lazily on explicit open. */
+  /** Resolve the selected Workspace's durable Project Memory controller for the live Home summary and exact editor route. */
   projectMemoryFor: (workspaceId: WorkspaceId) => ProjectMemoryController
 }
 
