@@ -6,40 +6,51 @@
 
 .root {
   --dsh-sidebar-inline-padding: 12px;
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   padding: 6px var(--dsh-sidebar-inline-padding);
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 84%, transparent);
+  background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 88%, transparent);
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   backdrop-filter: var(--dsw-alias-yanami-glass-blur);
-  /* The sidebar is elevated above the conversation surface, so a revealed
-     scrollbar uses the l2 pair. .quietBars hides it without changing layout. */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-/* Rail geometry: 36x36 control boxes centered in the 56px rail. */
+.root::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 132px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 28px 24px, color-mix(in srgb, var(--dsw-alias-yanami-lemon) 18%, transparent), transparent 52px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--dsw-alias-yanami-sky) 9%, transparent), transparent);
+  opacity: 0.8;
+}
+
+.root > * {
+  position: relative;
+  z-index: 1;
+}
+
 .root.collapsed {
   padding: 18px 10px 6px;
 }
 
-/* Scrollbars in the column are a pointer affordance. */
 .root.quietBars {
   --dsh-scrollbar-thumb: transparent;
   --dsh-scrollbar-thumb-hover: transparent;
 }
 
-/* Collapse phase 1: the whole frozen-width content fades out in place over
-   150ms; at settle the children unmount/snap to the rail layout. */
 .fading > * {
   opacity: 0;
   transition: opacity 150ms var(--ds-ease-in-out);
 }
 
-/* Wide-only content fades back in on expand remount. */
 .wide {
   animation: wide-in 200ms var(--ds-ease-in-out);
 }
@@ -48,7 +59,6 @@
   from { opacity: 0; }
 }
 
-/* At the rail settle, controls enter from the former rail right edge. */
 .railIn .iconButton,
 .railIn .newSession,
 .railIn .regionArea {
@@ -90,7 +100,6 @@
   justify-content: flex-start;
 }
 
-/* Expanded brand: compact bilingual copy with a lemon-yellow spark. */
 .brand {
   flex: 1;
   min-width: 0;
@@ -98,7 +107,7 @@
   align-items: center;
   gap: 9px;
   overflow: hidden;
-  padding: 6px 8px;
+  padding: 7px 8px;
   border: 1px solid transparent;
   border-radius: 14px;
   background: transparent;
@@ -107,12 +116,14 @@
   text-align: left;
   transition:
     background var(--ds-transition-duration) var(--ds-ease-in-out),
-    border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+    border-color var(--ds-transition-duration) var(--ds-ease-in-out),
+    box-shadow var(--ds-transition-duration) var(--ds-ease-in-out);
 }
 
 .brand:hover {
-  background: var(--dsw-alias-yanami-glass-fill);
+  background: var(--dsw-alias-yanami-glass-fill-strong);
   border-color: var(--dsw-alias-yanami-glass-border);
+  box-shadow: var(--dsw-alias-yanami-card-shadow);
 }
 
 .brandSpark {
@@ -122,9 +133,11 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-lemon) 20%, transparent);
   border-radius: 11px;
   color: var(--dsw-alias-yanami-lemon);
-  background: var(--dsw-alias-yanami-lemon-soft);
+  background: linear-gradient(145deg, var(--dsw-alias-yanami-lemon-soft), var(--dsw-alias-yanami-glass-fill-strong));
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--dsw-alias-yanami-lemon) 12%, transparent);
   font-size: 18px;
   line-height: 1;
 }
@@ -151,7 +164,7 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.035em;
   line-height: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -164,25 +177,27 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: none;
-  border-radius: 50%;
+  border: 1px solid transparent;
+  border-radius: 10px;
   padding: 0;
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-secondary);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .iconButton:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 10%, transparent);
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-yanami-navy);
 }
 
 .collapsed .iconButton {
   width: 36px;
   height: 36px;
+  border-radius: 12px;
 }
 
-/* Rail brand swap: the Yanami monogram rests in the rail and the panel icon
-   replaces it on hover to preserve the existing expand affordance. */
 .collapsed .toggle .panelIcon {
   display: none;
 }
@@ -215,7 +230,6 @@
   line-height: 1;
 }
 
-/* New Session becomes the principal action without changing its geometry. */
 .newSession {
   flex: none;
   display: flex;
@@ -226,25 +240,28 @@
   padding: 8px 16px;
   margin: 0 2px 8px;
   box-sizing: border-box;
-  border: 1px solid var(--dsw-alias-yanami-glass-border);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, var(--dsw-alias-yanami-glass-border));
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--dsw-alias-button-elevated-fill), var(--dsw-alias-yanami-glass-fill));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--dsw-alias-yanami-sky) 12%, var(--dsw-alias-button-elevated-fill)), var(--dsw-alias-yanami-glass-fill-strong));
   box-shadow: var(--dsw-alias-yanami-card-shadow);
   color: var(--dsw-alias-yanami-navy);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 620;
   line-height: 22px;
   cursor: pointer;
   overflow: hidden;
   transition:
     transform var(--ds-transition-duration-fast) var(--ds-ease-in-out),
     background var(--ds-transition-duration) var(--ds-ease-in-out),
-    border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+    border-color var(--ds-transition-duration) var(--ds-ease-in-out),
+    box-shadow var(--ds-transition-duration) var(--ds-ease-in-out);
 }
 
 .newSession:hover {
   background: var(--dsw-alias-button-floating-hover);
-  border-color: var(--dsw-alias-border-l3);
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 34%, var(--dsw-alias-border-l3));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--dsw-alias-yanami-blue) 10%, transparent);
   transform: translateY(-1px);
 }
 
@@ -275,9 +292,6 @@
   max-width: 0;
 }
 
-/* Region seat: always mounted so the foot never moves. Its trailing margin
-   cancels the wide shell inset so the nested scrollbar can sit at the sidebar
-   edge; the browser restores that inset inside its own rows. */
 .regionArea {
   flex: 1;
   min-height: 0;
@@ -295,14 +309,12 @@
   padding-left: 0;
 }
 
-/* Footer seats: additive actions stack above Settings. Each occupant owns its
-   button geometry and hover chrome. */
 .footArea {
   flex: none;
   display: flex;
   flex-direction: column;
   padding-top: 8px;
-  border-top: 1px solid var(--dsw-alias-yanami-glass-border);
+  border-top: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 9%, var(--dsw-alias-yanami-glass-border));
 }
 
 .settingsArea,
@@ -326,6 +338,17 @@
   display: flex;
   justify-content: center;
   width: auto;
+}
+
+:global(body:not([data-ds-dark-theme])) .root {
+  box-shadow: inset -1px 0 0 rgba(73, 135, 192, 0.035);
+}
+
+:global(body:not([data-ds-dark-theme])) .brand:hover,
+:global(body:not([data-ds-dark-theme])) .newSession {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    var(--dsw-alias-yanami-card-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {
