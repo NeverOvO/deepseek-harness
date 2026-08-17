@@ -137,7 +137,7 @@ describe('ui-workspace apply', () => {
     })
   })
 
-  it('routes browser actions and picker creation to the services', async () => {
+  it('routes browser actions and hero picker actions to the runtime services', async () => {
     const b = await bench()
     declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
@@ -175,6 +175,8 @@ describe('ui-workspace apply', () => {
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+    expect(picker.projectMemoryFor('ws' as never)).toBe(b.controller)
+    expect(b.controllerFor).toHaveBeenCalledWith('ws')
   })
 
   it('injects only the Project Memory controller lookup; Session membership stays on the renderer standard seat', async () => {
