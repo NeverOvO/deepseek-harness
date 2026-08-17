@@ -376,9 +376,11 @@ function ProjectMemoryEditor({
 /**
  * Resolve the controller only while the modal is open. Synchronous service
  * failures become visible UI instead of escaping into the slot boundary and
- * permanently blanking the header entry.
+ * permanently blanking the triggering surface. Exported so the blank-session
+ * Workbench can route into the exact same durable editor instead of cloning
+ * Project Memory state or transport.
  */
-function ProjectMemoryOpenPanel({
+export function ProjectMemoryOpenPanel({
   workspaceId,
   workspaceName,
   controllerFor,
