@@ -47,7 +47,8 @@ function missionProgress(mission?: GoalProjection | null): number {
 }
 
 function missionPhaseLabel(mission?: GoalProjection | null): string {
-  if (mission === undefined || mission === null) return '准备开始'
+  if (mission === undefined) return '载入中'
+  if (mission === null) return '待创建'
   switch (mission.goal.phase) {
     case 'active': return '进行中'
     case 'paused': return '已暂停'
@@ -63,7 +64,7 @@ export function YanamiHome({
   const project = projectName(cwd)
   const modeEnabled = onModeSelect !== undefined
   const missionPercent = missionProgress(mission)
-  const missionPhase = mission?.goal.phase ?? 'empty'
+  const missionPhase = mission === undefined ? 'loading' : mission === null ? 'empty' : mission.goal.phase
 
   const selectFromKeyboard = (event: KeyboardEvent<HTMLElement>, mode: YanamiMode): void => {
     if (event.key !== 'Enter' && event.key !== ' ') return
@@ -162,34 +163,40 @@ export function YanamiHome({
             <div><strong>任务驾驶舱</strong><small>Mission Cockpit</small></div>
             <span className={css.phaseTag}>{missionPhaseLabel(mission)}</span>
           </div>
-          <div
-            className={css.progressTrack}
-            role="progressbar"
-            aria-label={mission?.goal.phase === 'complete' ? '任务完成度' : 'Goal 执行轮次预算使用率'}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={missionPercent}
-          >
-            <span style={{ width: `${missionPercent}%` }} />
-          </div>
-          {mission === undefined || mission === null
-            ? <p>创建 Goal 后，这里会实时显示目标、生命周期、阻塞原因与执行轮次。</p>
-            : (
-              <>
-                <p title={mission.goal.objective}>{mission.goal.objective}</p>
-                {mission.goal.phase === 'blocked' && mission.goal.blockedReason !== undefined && (
-                  <p role="status">
-                    <strong>阻塞：</strong>{mission.goal.blockedReason.message}
-                  </p>
-                )}
-              </>
-            )}
+          {mission !== undefined && (
+            <div
+              className={css.progressTrack}
+              role="progressbar"
+              aria-label={mission?.goal.phase === 'complete' ? '任务完成度' : 'Goal 执行轮次预算使用率'}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={missionPercent}
+            >
+              <span style={{ width: `${missionPercent}%` }} />
+            </div>
+          )}
+          {mission === undefined
+            ? <p role="status">正在载入任务状态…</p>
+            : mission === null
+              ? <p>还没有 Goal。创建后，这里会实时显示目标、生命周期、阻塞原因与执行轮次。</p>
+              : (
+                <>
+                  <p title={mission.goal.objective}>{mission.goal.objective}</p>
+                  {mission.goal.phase === 'blocked' && mission.goal.blockedReason !== undefined && (
+                    <p role="status">
+                      <strong>阻塞：</strong>{mission.goal.blockedReason.message}
+                    </p>
+                  )}
+                </>
+              )}
           <div className={css.panelFoot}>
-            {mission === undefined || mission === null
-              ? '目标 → 执行 → 验证 → 交付'
-              : mission.goal.phase === 'complete'
-                ? `已完成 · 共启动 ${mission.roundsStarted} 轮`
-                : `执行轮次 ${mission.roundsStarted} / ${mission.goal.maxGoalRounds} · ${missionPercent}% 预算已用`}
+            {mission === undefined
+              ? '正在连接任务上下文'
+              : mission === null
+                ? '目标 → 执行 → 验证 → 交付'
+                : mission.goal.phase === 'complete'
+                  ? `已完成 · 共启动 ${mission.roundsStarted} 轮`
+                  : `执行轮次 ${mission.roundsStarted} / ${mission.goal.maxGoalRounds} · ${missionPercent}% 预算已用`}
           </div>
         </article>
 

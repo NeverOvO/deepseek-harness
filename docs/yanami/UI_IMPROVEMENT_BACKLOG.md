@@ -39,7 +39,7 @@ The home dashboard must progressively become an operational surface instead of r
 - [ ] Replace static Evidence & Delivery placeholders with real test/build/risk evidence when the composed delivery service exposes it.
 - [ ] Add recent-task / recent-activity summaries from durable session/workspace state rather than mock counters.
 - [ ] Promote actionable smart suggestions only when they can execute or navigate to a real Workbench capability.
-- [ ] Define intentional loading/empty/error states for every live dashboard surface.
+- [x] Define intentional loading/empty/error states for every live dashboard surface; Mission now distinguishes projection loading from settled-empty and all durable phases, while Project Memory covers loading, empty, error/stale-error, retry, coverage, and candidate states.
 
 ## P2 — approved light visual direction
 

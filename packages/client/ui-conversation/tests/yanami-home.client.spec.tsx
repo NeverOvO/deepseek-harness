@@ -31,11 +31,20 @@ function mission(
 }
 
 describe('YanamiHome Mission cockpit', () => {
-  it('shows an honest empty state before a goal exists', () => {
+  it('shows an intentional loading state before the goal projection arrives', () => {
     const view = render(<YanamiHome activeMode="do" />)
 
-    expect(view.getByText('准备开始')).toBeTruthy()
-    expect(view.getByText(/创建 Goal 后/)).toBeTruthy()
+    expect(view.getByText('载入中')).toBeTruthy()
+    expect(view.getByText('正在载入任务状态…')).toBeTruthy()
+    expect(view.getByText('正在连接任务上下文')).toBeTruthy()
+    expect(view.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('distinguishes a settled empty projection from loading', () => {
+    const view = render(<YanamiHome mission={null} activeMode="do" />)
+
+    expect(view.getByText('待创建')).toBeTruthy()
+    expect(view.getByText(/还没有 Goal/)).toBeTruthy()
     expect(view.getByRole('progressbar', { name: 'Goal 执行轮次预算使用率' })
       .getAttribute('aria-valuenow')).toBe('0')
   })
