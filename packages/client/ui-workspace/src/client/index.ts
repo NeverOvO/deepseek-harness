@@ -4,8 +4,9 @@
  * whole browsing region), and WorkspacePicker fills the conversation hero's
  * picker hole (`conversation.hero.workspace` — both hero forms). A third,
  * additive session-header entry exposes Project Memory for the Workspace that
- * owns the current Session. Data stays in Client Runtime/Host storage; this
- * package owns only the Workbench presentation.
+ * owns the current Session. The hero picker also routes its selected Workspace
+ * into that same durable Project Memory controller. Data stays in Client
+ * Runtime/Host storage; this package owns only the Workbench presentation.
  */
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -107,6 +108,7 @@ export function apply(ctx: ClientContext): void {
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => ctx.workspaces.create(input),
+    projectMemoryFor: workspaceId => ctx.projectMemories.forWorkspace(workspaceId),
     hooks: { directoryFlow: pickerFlowSource },
   })
 
