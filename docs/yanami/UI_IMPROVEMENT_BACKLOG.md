@@ -34,7 +34,8 @@ The home dashboard must progressively become an operational surface instead of r
 - [x] Do / Spec / Plan / Review / Ship cards switch the real Yanami mode rather than only changing presentation.
 - [x] Mission Cockpit consumes the live Goal projection when a mission exists.
 - [x] Project Memory is a real Workspace-level durable editor in the conversation header, including candidate review.
-- [ ] Give the Home Project Memory surface a first-class route into the same durable editor without duplicating transport or state.
+- [x] Give the Home / New Session surface a first-class route into the same durable Project Memory editor without duplicating transport or state.
+- [ ] Promote the Home Project Memory card itself into a richer status/action surface once its summary contract is defined.
 - [ ] Replace static Evidence & Delivery placeholders with real test/build/risk evidence when the composed delivery service exposes it.
 - [ ] Add recent-task / recent-activity summaries from durable session/workspace state rather than mock counters.
 - [ ] Promote actionable smart suggestions only when they can execute or navigate to a real Workbench capability.
@@ -65,7 +66,7 @@ The home dashboard must progressively become an operational surface instead of r
 - Desktop density is stable.
 
 ### M2 — Operational Home
-- Home Project Memory opens the real durable editor.
+- Home / New Session has a direct route into the real durable Project Memory editor.
 - Mission card is live.
 - Evidence card is live where evidence services are composed.
 - Recent work is derived from real session/workspace state.
