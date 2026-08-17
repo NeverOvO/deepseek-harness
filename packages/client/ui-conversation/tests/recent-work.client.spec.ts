@@ -38,7 +38,7 @@ describe('recentWorkspaceSessions', () => {
   it('prioritizes pending interaction over other status hints and respects the limit', () => {
     const attention = row('attention', 50, {
       running: true,
-      pendingInteraction: { kind: 'approval' } as SessionSummary['pendingInteraction'],
+      pendingInteraction: 'approval',
     })
     const second = row('second', 40)
     const byId = { attention, second } as unknown as Record<SessionId, SessionSummary>
