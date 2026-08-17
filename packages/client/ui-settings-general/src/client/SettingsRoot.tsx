@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  BodyPortal, IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
+  BodyPortal, containDialogTab, focusDialogEntry, IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
   IconPersonalizationOutline16, IconSettingsOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
@@ -51,24 +51,42 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
   const titleId = useId()
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const closeButton = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = panelRef.current
+    if (dialog !== null) focusDialogEntry(dialog, closeButton.current)
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      const currentDialog = panelRef.current
+      if (currentDialog !== null) containDialogTab(e, currentDialog)
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown) }
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      if (returnFocus?.isConnected === true) returnFocus.focus({ preventScroll: true })
+    }
   }, [onClose])
-
-  // Baseline focus management: entering the dialog lands on the close button.
-  const closeButton = useRef<HTMLButtonElement | null>(null)
-  useEffect(() => { closeButton.current?.focus() }, [])
 
   return (
     <BodyPortal>
       <div className={css.overlay} role="presentation">
         <div className={css.mask} aria-hidden="true" onClick={onClose} />
-        <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div
+          ref={panelRef}
+          className={css.panel}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+        >
           <nav className={css.nav}>
             <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
             <div className={css.navList}>
