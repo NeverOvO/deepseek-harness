@@ -64,13 +64,13 @@
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(960px, calc(100vw - 64px));
-  height: min(680px, calc(100dvh - 64px));
-  min-width: 680px;
+  width: min(900px, calc(100vw - 72px));
+  height: min(630px, calc(100dvh - 72px));
+  min-width: 650px;
   max-width: 100%;
-  min-height: 460px;
+  min-height: 440px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 22px;
+  border-radius: 21px;
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-shadow-lv3);
@@ -82,9 +82,9 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 204px;
-  padding: 22px 12px;
+  gap: 15px;
+  width: 190px;
+  padding: 20px 11px;
   box-sizing: border-box;
   border-right: 1px solid var(--dsw-alias-border-l2);
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 88%, var(--dsw-alias-interactive-bg-hover));
@@ -108,8 +108,8 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 40px;
-  padding: 8px 12px 8px 10px;
+  min-height: 38px;
+  padding: 7px 11px 7px 10px;
   box-sizing: border-box;
   border: 1px solid transparent;
   border-radius: 11px;
@@ -158,8 +158,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 58px;
-  padding: 14px 18px 8px 22px;
+  min-height: 54px;
+  padding: 12px 17px 7px 20px;
   box-sizing: border-box;
 }
 
@@ -196,7 +196,7 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
-  padding: 4px 24px 28px;
+  padding: 4px 22px 24px;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -210,30 +210,30 @@
   white-space: nowrap;
 }
 
-/* Height-sensitive density matters on desktop Electron windows: oversized
-   dialogs should not consume nearly the whole viewport merely because there
-   is enough width. Keep the shell calm and let the options column scroll. */
+/* Height-sensitive desktop density must only shrink the shell. Never expand a
+   compact base dialog back to nearly full viewport height on short Electron
+   windows. */
 @media (max-height: 820px) and (min-width: 681px) {
   .overlay {
     padding-block: 16px;
   }
 
   .panel {
-    height: calc(100dvh - 32px);
+    height: min(600px, calc(100dvh - 32px));
     min-height: 0;
   }
 
   .nav {
-    padding-block: 18px;
+    padding-block: 16px;
   }
 
   .header {
-    min-height: 52px;
-    padding-top: 10px;
+    min-height: 50px;
+    padding-top: 9px;
   }
 
   .options {
-    padding-bottom: 20px;
+    padding-bottom: 18px;
   }
 }
 
@@ -244,13 +244,13 @@
 
   .panel {
     width: calc(100vw - 36px);
-    height: calc(100dvh - 36px);
+    height: min(630px, calc(100dvh - 36px));
     min-width: 0;
     min-height: 0;
   }
 
   .nav {
-    width: 176px;
+    width: 170px;
     padding-inline: 10px;
   }
 
@@ -266,7 +266,7 @@
 
   .nav {
     width: 100%;
-    max-height: 178px;
+    max-height: 168px;
     border-right: 0;
     border-bottom: 1px solid var(--dsw-alias-border-l2);
     overflow: auto;
