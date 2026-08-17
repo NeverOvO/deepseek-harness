@@ -67,9 +67,18 @@ export function ConversationSessionHeader({
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
   const ancestry = useSessions(s => deriveAncestry(s, sessionId), equalBreadcrumbs)
+  const openState = useSession(s => s.openState)
   const composerPhase = useSession(s => s.composerPhase)
   const blank = useSession(s => s.blank)
   const hideChrome = blank && composerPhase === 'blank'
+  // Session summaries and the strict session store do not settle atomically.
+  // Never expose the transport/session id while the breadcrumb source catches
+  // up: show a calm product state that mirrors history loading/error language.
+  const fallbackTitle = openState === 'error'
+    ? t('placeholder.unavailable')
+    : openState === 'open'
+      ? t('view.chat')
+      : t('chat.loadingHistory')
 
   return (
     <header
@@ -97,7 +106,11 @@ export function ConversationSessionHeader({
                     </span>
                   )
                 })}
-                {ancestry.length === 0 && <span className={css.crumbCurrent}>{sessionId}</span>}
+                {ancestry.length === 0 && (
+                  <span className={css.crumbCurrent} role="status" aria-live="polite">
+                    {fallbackTitle}
+                  </span>
+                )}
               </nav>
               <div className={css.headerActions}>
                 {renderSlot('conversation.session.header.actions', {})}
