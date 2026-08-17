@@ -13,7 +13,7 @@ Yanami UI work is delivered in coherent milestones, not screenshot-by-screenshot
 - [x] Project Memory editor uses an editor-grade modal instead of the default compact dialog width.
 - [x] Project Memory fields have predictable internal scrolling and no cramped textareas.
 - [x] Temporary Project Memory slot diagnostics have been removed from production console output.
-- [ ] Check other overlays for sidebar/container clipping.
+- [x] Check other overlays for sidebar/container clipping; shared Modal and HoverCard surfaces portal to `document.body`, while Workspace and session action menus use portal mode, so sidebar overflow/stacking contexts cannot crop them.
 
 ## P1 — visual normalization
 
