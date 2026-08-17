@@ -18,6 +18,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
+import { ProjectMemoryOpenPanel } from './project-memory/ProjectMemoryHeaderAction.tsx'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -218,9 +219,11 @@ export function WorkspacePickFlow({
 
 /**
  * The conversation empty-state registration: adapts the owner share to the
- * core flow (all state and semantics live in the flow / the owner).
- * @param props - empty-state slot props (owner share + injected creation callback).
- * @returns the flow element.
+ * core flow and adds one first-class Project Memory route for the selected
+ * Workspace. The editor is exactly the same durable surface used by the
+ * active-session header; no second cache or persistence path is introduced.
+ * @param props - empty-state slot props (owner share + injected creation / memory callbacks).
+ * @returns the flow element plus the selected Workspace's memory action.
  */
 export function WorkspacePicker({
   open,
@@ -230,22 +233,60 @@ export function WorkspacePicker({
   onPick,
   onClose,
   createWorkspace,
+  projectMemoryFor,
   useDirectoryFlow,
   renderSlot,
   t,
 }: WorkspacePickerProps) {
+  const selectedWorkspace = useWorkspaces(state => (
+    selectedId === undefined
+      ? null
+      : state.items.find(item => item.workspaceId === selectedId) ?? null
+  ))
+  const [memoryOpen, setMemoryOpen] = useState(false)
+
+  useEffect(() => {
+    setMemoryOpen(false)
+  }, [selectedWorkspace?.workspaceId])
+
   return (
-    <WorkspacePickFlow
-      t={t}
-      open={open}
-      anchorRef={anchorRef}
-      useWorkspaces={useWorkspaces}
-      createWorkspace={createWorkspace}
-      useDirectoryFlow={useDirectoryFlow}
-      renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
-      selectedId={selectedId}
-      onPick={onPick}
-      onClose={onClose}
-    />
+    <>
+      {selectedWorkspace !== null && (
+        <button
+          type="button"
+          className={css.memoryAction}
+          aria-expanded={memoryOpen}
+          onClick={() => {
+            onClose()
+            setMemoryOpen(value => !value)
+          }}
+        >
+          <span className={css.memoryActionIcon}>▱</span>
+          {t('memory.action')}
+        </button>
+      )}
+      <WorkspacePickFlow
+        t={t}
+        open={open}
+        anchorRef={anchorRef}
+        useWorkspaces={useWorkspaces}
+        createWorkspace={createWorkspace}
+        useDirectoryFlow={useDirectoryFlow}
+        renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
+        selectedId={selectedId}
+        onPick={onPick}
+        onClose={onClose}
+      />
+      {memoryOpen && selectedWorkspace !== null && (
+        <ProjectMemoryOpenPanel
+          key={selectedWorkspace.workspaceId}
+          workspaceId={selectedWorkspace.workspaceId}
+          workspaceName={selectedWorkspace.title}
+          controllerFor={projectMemoryFor}
+          onClose={() => { setMemoryOpen(false) }}
+          t={t}
+        />
+      )}
+    </>
   )
 }
