@@ -4,21 +4,23 @@ This backlog operationalizes `UI_VISUAL_AND_PRODUCT_CONSTRAINTS.md`. Keep it cur
 
 ## P0 — structural correctness
 
-- [ ] Settings overlay must render at viewport scope, never inside sidebar width/stacking context.
-- [ ] Settings panel must remain readable at desktop widths with a stable two-column shell.
-- [ ] Project Memory editor must use a wide editor-grade modal instead of the default compact dialog width.
-- [ ] Project Memory fields must have predictable internal scrolling and no cramped textareas.
-- [ ] Remove temporary Project Memory slot diagnostics from production console output.
+- [x] Settings overlay renders at viewport scope, never inside sidebar width/stacking context.
+- [x] Settings panel remains readable at desktop widths with a stable two-column shell.
+- [x] Project Memory editor uses an editor-grade modal instead of the default compact dialog width.
+- [x] Project Memory fields have predictable internal scrolling and no cramped textareas.
+- [x] Temporary Project Memory slot diagnostics have been removed from production console output.
 - [ ] Check other overlays for sidebar/container clipping.
 
 ## P1 — visual normalization
 
+- [x] Add a first desktop-density pass for Home, Settings and Project Memory so 1440–1728 wide Electron windows do not feel zoomed or oversized.
 - [ ] Establish reusable surface/card spacing and radius rules across Workbench home.
 - [ ] Normalize Do / Spec / Plan / Review / Ship cards and selected states.
 - [ ] Normalize header chips/buttons between Home and Conversation.
 - [ ] Improve workspace/sidebar hierarchy: section labels, current workspace, current session, actions.
 - [ ] Normalize Project Memory, Mission Cockpit and Evidence surfaces to one card language.
 - [ ] Improve empty/loading/error states so they feel intentional rather than raw technical states.
+- [ ] Validate the Home + resident composer composition at common Electron viewport heights (760 / 820 / 900 CSS px) without immediate unnecessary scrolling.
 
 ## P2 — approved light visual direction
 
@@ -42,6 +44,7 @@ A UI item is not complete until:
 - it has no horizontal/vertical text compression defects;
 - modal/overlay placement is correct at desktop viewport scope;
 - primary actions are always reachable;
+- desktop-scale UI stays proportionate when usable viewport height is smaller than the concept-art canvas;
 - light theme matches the Yanami visual constraint direction;
 - dark theme remains readable;
 - no debug logging or temporary tracing is left behind.
