@@ -12,35 +12,44 @@
   transform: translateX(-50%);
 }
 
-/* Folder + label + chevron — the existing selector remains the real workspace
-   control below the dashboard, so the home does not fork workflow state. */
+/* Compact Workbench control chrome. The hero workspace picker shares the same
+   28px geometry and interaction treatment as the active-session header actions;
+   semantics still differ by component, but density no longer changes by phase. */
 .workspace {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   max-width: min(100%, 330px);
-  min-height: 28px;
+  height: 28px;
   padding: 0 9px;
-  border: 1px solid var(--dsw-alias-yanami-glass-border);
-  border-radius: 999px;
-  background: var(--dsw-alias-yanami-glass-fill-strong);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 14%, var(--dsw-alias-border-l2));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--dsw-alias-yanami-glass-fill-strong) 72%, transparent);
   color: var(--dsw-alias-yanami-navy);
-  box-shadow: var(--dsw-alias-yanami-card-shadow);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dsw-alias-bg-layer-3) 28%, transparent);
   font-size: 12px;
-  line-height: 20px;
+  line-height: 26px;
   font-weight: 500;
   cursor: pointer;
   backdrop-filter: var(--dsw-alias-yanami-glass-blur);
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .workspace:not(:disabled):hover,
 .workspace[aria-expanded='true'] {
-  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 34%, transparent);
-  background: color-mix(in srgb, var(--dsw-alias-yanami-sky) 24%, var(--dsw-alias-yanami-glass-fill-strong));
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 32%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-yanami-sky) 14%, var(--dsw-alias-interactive-bg-hover));
+}
+
+.workspace:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 62%, var(--dsw-alias-state-business-primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-yanami-blue) 11%, transparent);
 }
 
 .workspace:disabled {
   cursor: default;
+  color: var(--dsw-alias-label-dimmed);
 }
 
 .folder {

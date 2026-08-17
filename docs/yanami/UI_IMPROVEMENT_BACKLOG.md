@@ -20,7 +20,7 @@ Yanami UI work is delivered in coherent milestones, not screenshot-by-screenshot
 - [x] Add a first desktop-density pass for Home, Settings and Project Memory so 1440–1728 wide Electron windows do not feel zoomed or oversized.
 - [x] Establish reusable surface/card spacing and radius rules across Workbench home.
 - [x] Normalize Do / Spec / Plan / Review / Ship cards and selected states.
-- [ ] Normalize header chips/buttons between Home and Conversation.
+- [x] Normalize header chips/buttons between Home and Conversation; Workspace and Agent Preset now share the same 28px compact control geometry as active-session header actions while read-only session context keeps the same rhythm without false interaction.
 - [x] Improve workspace/sidebar hierarchy: section labels, current workspace, current session, actions.
 - [x] Normalize Project Memory, Mission Cockpit and Evidence surfaces to one card language.
 - [x] Carry the Yanami surface language into Settings, Project Memory editor and active transcript chrome.
