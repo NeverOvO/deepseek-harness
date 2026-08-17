@@ -7,24 +7,9 @@ import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
+import { containDialogTab, focusDialogEntry } from './dialog-focus.ts'
 import { IconCloseOutline16 } from './icons/index.tsx'
 import css from './Modal.module.css'
-
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',')
-
-function focusableChildren(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(element => (
-    element.getAttribute('aria-hidden') !== 'true'
-    && element.hidden !== true
-  ))
-}
 
 /**
  * Render a centered modal over a blurred page mask.
@@ -63,10 +48,7 @@ export function Modal({
     if (!open) return
     const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const dialog = dialogRef.current
-    if (dialog !== null && !dialog.contains(document.activeElement)) {
-      const first = focusableChildren(dialog)[0]
-      ;(first ?? dialog).focus({ preventScroll: true })
-    }
+    if (dialog !== null) focusDialogEntry(dialog)
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -74,25 +56,8 @@ export function Modal({
         onCloseRef.current()
         return
       }
-      if (e.key !== 'Tab') return
       const currentDialog = dialogRef.current
-      if (currentDialog === null) return
-      const focusable = focusableChildren(currentDialog)
-      if (focusable.length === 0) {
-        e.preventDefault()
-        currentDialog.focus({ preventScroll: true })
-        return
-      }
-      const first = focusable[0]
-      const last = focusable.at(-1)
-      if (first === undefined || last === undefined) return
-      if (e.shiftKey && (document.activeElement === first || !currentDialog.contains(document.activeElement))) {
-        e.preventDefault()
-        last.focus({ preventScroll: true })
-      } else if (!e.shiftKey && (document.activeElement === last || !currentDialog.contains(document.activeElement))) {
-        e.preventDefault()
-        first.focus({ preventScroll: true })
-      }
+      if (currentDialog !== null) containDialogTab(e, currentDialog)
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
