@@ -24,7 +24,7 @@ Yanami UI work is delivered in coherent milestones, not screenshot-by-screenshot
 - [x] Improve workspace/sidebar hierarchy: section labels, current workspace, current session, actions.
 - [x] Normalize Project Memory, Mission Cockpit and Evidence surfaces to one card language.
 - [x] Carry the Yanami surface language into Settings, Project Memory editor and active transcript chrome.
-- [ ] Improve empty/loading/error states so they feel intentional rather than raw technical states.
+- [x] Improve empty/loading/error states so they feel intentional rather than raw technical states; live Home dashboard surfaces, conversation history, and Conversation Header fallbacks now use explicit product states with accessible status semantics.
 - [x] Validate the Home + resident composer composition at common Electron viewport heights (760 / 820 / 900 CSS px) without immediate unnecessary scrolling.
 
 ## P1.5 — functional dashboard convergence
@@ -35,7 +35,7 @@ The home dashboard must progressively become an operational surface instead of r
 - [x] Mission Cockpit consumes the live Goal projection when a mission exists.
 - [x] Project Memory is a real Workspace-level durable editor in the conversation header, including candidate review.
 - [x] Give the Home / New Session surface a first-class route into the same durable Project Memory editor without duplicating transport or state.
-- [x] Promote the Home Project Memory card itself into a richer status/action surface; it now renders durable section coverage, pending candidate count, loading/empty/error states, retry, and the same editor action through the existing Workspace slot.
+- [x] Promote the Home Project Memory card itself into a richer status/action surface; it now renders durable section coverage, pending candidate count, loading/empty/error states, retry, coverage, and candidate states.
 - [ ] Replace static Evidence & Delivery placeholders with real test/build/risk evidence when the composed delivery service exposes it.
 - [x] Add recent-task / recent-activity summaries from durable session/workspace state rather than mock counters; Home now projects the selected Workspace's three most recently updated nonblank sessions with honest running/attention/completion hints.
 - [ ] Promote actionable smart suggestions only when they can execute or navigate to a real Workbench capability.
