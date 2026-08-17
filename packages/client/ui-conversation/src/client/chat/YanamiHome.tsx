@@ -117,7 +117,7 @@ export function YanamiHome({
           </span>
         </div>
         <div className={css.modeGrid}>
-          {MODES.map(mode => {
+          {MODES.map((mode, index) => {
             const active = activeMode === mode.key
             const switching = switchingMode === mode.key
             const disabled = !modeEnabled || switchingMode !== undefined
@@ -136,9 +136,16 @@ export function YanamiHome({
                 onKeyDown={disabled ? undefined : event => { selectFromKeyboard(event, mode.key) }}
               >
                 <div className={css.modeIcon}>{switching ? '…' : mode.label.slice(0, 1)}</div>
-                <div>
-                  <strong>{mode.label} <span>{mode.title}</span></strong>
+                <div className={css.modeCopy}>
+                  <div className={css.modeHeading}>
+                    <strong>{mode.label} <span>{mode.title}</span></strong>
+                    <span className={css.modeIndex}>{String(index + 1).padStart(2, '0')}</span>
+                  </div>
                   <p>{mode.note}</p>
+                  <div className={css.modeState} aria-hidden="true">
+                    <span />
+                    {switching ? '正在切换' : active ? '当前模式' : '可切换'}
+                  </div>
                 </div>
               </article>
             )
@@ -148,7 +155,7 @@ export function YanamiHome({
       </section>
 
       <section className={css.lowerGrid}>
-        <article className={css.panel} data-mission-phase={missionPhase}>
+        <article className={css.panel} data-tone="blue" data-mission-phase={missionPhase}>
           <div className={css.panelTitle}>
             <span className={css.panelIcon}>◎</span>
             <div><strong>任务驾驶舱</strong><small>Mission Cockpit</small></div>
@@ -185,7 +192,7 @@ export function YanamiHome({
           </div>
         </article>
 
-        <article className={css.panel}>
+        <article className={css.panel} data-tone="sky">
           <div className={css.panelTitle}>
             <span className={css.panelIcon}>▱</span>
             <div><strong>项目记忆</strong><small>Project Memory</small></div>
@@ -196,7 +203,7 @@ export function YanamiHome({
           <p>后续绑定 Workspace 级长期记忆，让不同会话共享同一项目上下文。</p>
         </article>
 
-        <article className={css.panel}>
+        <article className={css.panel} data-tone="mint">
           <div className={css.panelTitle}>
             <span className={css.panelIcon}>✓</span>
             <div><strong>证据交付</strong><small>Evidence & Delivery</small></div>
@@ -209,7 +216,7 @@ export function YanamiHome({
           <p>完成不是一句“已完成”，而是一组可复核的验证证据。</p>
         </article>
 
-        <article className={css.panelAccent}>
+        <article className={css.panelAccent} data-tone="lemon">
           <div className={css.notePaper}>
             <small>今日小记</small>
             <strong>复杂的问题，<br />也可以拆成简单的阶段。</strong>
