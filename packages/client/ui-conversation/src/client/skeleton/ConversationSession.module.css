@@ -1,0 +1,60 @@
+.fallbackStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 58%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fallbackDot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dsw-alias-border-l2);
+}
+
+.fallbackStatus[data-state='loading'] .fallbackDot {
+  background: var(--dsw-alias-state-business-primary);
+  animation: fallbackPulse 1.4s ease-in-out infinite;
+}
+
+.fallbackStatus[data-state='ready'] .fallbackDot {
+  background: var(--dsw-alias-yanami-navy);
+}
+
+.fallbackStatus[data-state='error'] {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 82%, var(--dsw-alias-yanami-glass-fill));
+}
+
+.fallbackStatus[data-state='error'] .fallbackDot {
+  background: var(--dsw-alias-label-secondary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-border-l2) 62%, transparent);
+}
+
+@keyframes fallbackPulse {
+  0%, 100% {
+    opacity: 0.42;
+    transform: scale(0.82);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fallbackStatus[data-state='loading'] .fallbackDot {
+    animation: none;
+  }
+}
