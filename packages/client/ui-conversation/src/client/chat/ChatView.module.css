@@ -1,7 +1,6 @@
 /* Chat flow: one 16px rhythm everywhere through the column gap. Input
-   padding cap rides the skeleton. Under
-   `[data-conversation-scroll]` the column host owns overflow and this view
-   is ordinary flow (see ConversationRoot active-phase rules). */
+   padding cap rides the skeleton. Under `[data-conversation-scroll]` the
+   column host owns overflow and this view is ordinary flow. */
 
 .root {
   position: relative;
@@ -15,9 +14,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  /* Sides = composer clearance + 16px: on narrow viewports the transcript
-     stays exactly 32px narrower than the input card (the shared width rule). */
-  padding: 16px calc(var(--dsh-composer-side-clearance) + 16px);
+  padding: 18px calc(var(--dsh-composer-side-clearance) + 16px) 22px;
 }
 
 :global([data-conversation-scroll]) .root {
@@ -32,10 +29,8 @@
   min-height: auto;
 }
 
-/* Message column: shared chat width (ConversationRoot --dsh-chat-content-width),
-   centered on the same axis as the input box (which caps at chat + 16px); the
-   scroller itself stays full-bleed. */
 .column {
+  position: relative;
   max-width: var(--dsh-chat-content-width);
   width: 100%;
   margin: 0 auto;
@@ -44,44 +39,51 @@
   gap: 16px;
 }
 
-/* Settled-flow identity boundary. It is neutral today and becomes the natural
-   measurement/mount unit for a virtualizer without changing the column gap. */
+.column::before {
+  content: '';
+  position: absolute;
+  inset: -10px -18px auto;
+  height: 104px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 28px;
+  background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--dsw-alias-yanami-sky) 12%, transparent), transparent 68%);
+  opacity: 0.72;
+}
+
 .flowItem {
   min-width: 0;
 }
 
-/* A keyed renderer may intentionally decline its row after dispatch (the
-   completed-turn tail does this when it owns neither actions nor extensions).
-   An empty flex item must not consume the column gap. */
 .flowItem:empty {
   display: none;
 }
 
 .callRow {
-  border-radius: 6px;
+  border-radius: 10px;
 }
 
-/* Selection still sets data-selected for details linkage; no outline —
-   tool rows match Think chrome (no selected ring). */
-
-/* Turn activity keeps the former loader's one-line footprint. A pale
-   brand-blue band sweeps from left to right; reduced-motion keeps it static. */
 .turnStatus {
   align-self: flex-start;
   flex: none;
   display: inline-flex;
   align-items: center;
   height: 26px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 8%, transparent);
+  border-radius: 999px;
   font: var(--dsw-font-s-strong-14);
   white-space: nowrap;
-  background: linear-gradient(
-    90deg,
-    var(--dsw-static-deepseek-500) 0%,
-    var(--dsw-static-deepseek-500) 40%,
-    var(--dsw-static-deepseek-200) 50%,
-    var(--dsw-static-deepseek-500) 60%,
-    var(--dsw-static-deepseek-500) 100%
-  );
+  background:
+    linear-gradient(
+      90deg,
+      var(--dsw-static-deepseek-500) 0%,
+      var(--dsw-static-deepseek-500) 40%,
+      var(--dsw-static-deepseek-200) 50%,
+      var(--dsw-static-deepseek-500) 60%,
+      var(--dsw-static-deepseek-500) 100%
+    ),
+    color-mix(in srgb, var(--dsw-alias-yanami-glass-fill-strong) 90%, transparent);
   background-position: 100% 0;
   background-size: 250% 100%;
   background-clip: text;
@@ -115,13 +117,21 @@
 }
 
 .hint {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 7%, transparent);
+  border-radius: 10px;
   color: var(--dsw-alias-label-tertiary);
+  background: color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 72%, transparent);
   font-size: 12px;
   line-height: 18px;
 }
 
 .openError {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, transparent);
+  border-radius: 10px;
   color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 5%, transparent);
   font-size: 12px;
   line-height: 18px;
 }
@@ -132,13 +142,21 @@
 }
 
 .older button {
-  border: none;
-  border-radius: 14px;
-  padding: 4px 12px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 10%, var(--dsw-alias-border-l2));
+  border-radius: 999px;
+  padding: 5px 13px;
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+  background: var(--dsw-alias-button-floating-fill);
+  box-shadow: var(--dsw-alias-yanami-card-shadow);
   cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.older button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 22%, var(--dsw-alias-border-l2));
+  background: var(--dsw-alias-button-floating-hover);
+  color: var(--dsw-alias-yanami-navy);
 }
 
 .older button:disabled {
@@ -146,14 +164,9 @@
   opacity: 0.6;
 }
 
-/* Back-to-bottom: zero-height sticky slot so the control does not extend
-   scrollHeight; the button translates up into the viewport. Under the
-   conversation host, clearance sits above the sticky composer stack. */
 .toBottomSlot {
   position: sticky;
   bottom: 16px;
-  /* Above the sticky composer (z-index 7) so the control stays clickable and
-     visible over the input card. */
   z-index: 8;
   height: 0;
   display: flex;
@@ -163,10 +176,6 @@
 }
 
 :global([data-conversation-scroll]) .toBottomSlot {
-  /* Clears the sticky composer stack (docks + input card + stats): the live
-     height rides --dsh-composer-height (ConversationRoot's seat observer) so
-     the control follows a growing textarea; the fallback covers the first
-     paint before the observer fires. */
   bottom: calc(var(--dsh-composer-height, 152px) + 16px);
 }
 
@@ -178,15 +187,25 @@
   height: 34px;
   margin-top: -34px;
   padding: 0;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 16%, var(--dsw-alias-border-l2));
   border-radius: 100px;
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-yanami-navy);
   background: var(--dsw-alias-button-floating-fill);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-alias-yanami-card-shadow);
   cursor: pointer;
   pointer-events: auto;
+  backdrop-filter: var(--dsw-alias-yanami-glass-blur);
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .toBottom:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 28%, var(--dsw-alias-border-l2));
   background: var(--dsw-alias-button-floating-hover);
+}
+
+:global(body:not([data-ds-dark-theme])) .scroll {
+  background:
+    radial-gradient(circle at 80% 10%, rgba(255, 229, 155, 0.08), transparent 26%),
+    radial-gradient(circle at 12% 85%, rgba(137, 210, 199, 0.045), transparent 32%);
 }
