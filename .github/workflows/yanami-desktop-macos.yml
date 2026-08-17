@@ -64,7 +64,18 @@ jobs:
         run: pnpm --filter @deepseek-ai/dsh-desktop run build
 
       - name: Package macOS application
-        run: pnpm --filter @deepseek-ai/dsh-desktop run make:mac
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @deepseek-ai/dsh-desktop run make:mac 2>&1 | tee apps/desktop/package-macos.log
+
+      - name: Upload macOS packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yanami-desktop-package-diagnostics
+          path: apps/desktop/package-macos.log
+          if-no-files-found: error
 
       - name: Inspect packaged application
         run: |
