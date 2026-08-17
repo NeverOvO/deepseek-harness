@@ -84,7 +84,8 @@ export function Modal({
         return
       }
       const first = focusable[0]
-      const last = focusable[focusable.length - 1]
+      const last = focusable.at(-1)
+      if (first === undefined || last === undefined) return
       if (e.shiftKey && (document.activeElement === first || !currentDialog.contains(document.activeElement))) {
         e.preventDefault()
         last.focus({ preventScroll: true })
