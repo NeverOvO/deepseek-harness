@@ -1,12 +1,10 @@
 .frame {
-  position: relative; /* anchors the drag handles, which straddle column borders */
+  position: relative;
   display: grid;
   grid-template-rows: 100%;
   height: 100%;
   overflow: hidden;
   background: var(--dsw-alias-yanami-workbench-bg);
-  /* Collapse/expand animates the tracks on the deepsuite sider curve
-     (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
@@ -21,23 +19,22 @@
 }
 
 .frame::before {
-  width: 320px;
-  height: 320px;
-  right: -120px;
-  top: -140px;
+  width: 360px;
+  height: 360px;
+  right: -140px;
+  top: -160px;
   background: var(--dsw-alias-yanami-lemon-soft);
+  opacity: 0.8;
 }
 
 .frame::after {
-  width: 260px;
-  height: 260px;
-  left: -110px;
-  bottom: -140px;
+  width: 300px;
+  height: 300px;
+  left: -130px;
+  bottom: -160px;
   background: color-mix(in srgb, var(--dsw-alias-yanami-mint) 12%, transparent);
 }
 
-/* Dragging writes widths at pointer cadence; easing them would detach the
-   column from the handle. */
 .frame[data-dragging] {
   transition: none;
 }
@@ -60,34 +57,32 @@
 .sidebarCol {
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
-  border-right: 1px solid var(--dsw-alias-yanami-glass-border);
-  box-shadow: var(--dsw-alias-yanami-card-shadow);
+  border-right: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 9%, var(--dsw-alias-yanami-glass-border));
+  box-shadow: 5px 0 24px color-mix(in srgb, var(--dsw-alias-yanami-blue) 4%, transparent);
 }
 
 .centerCol {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 82%, transparent);
+  background:
+    radial-gradient(circle at 88% 7%, color-mix(in srgb, var(--dsw-alias-yanami-lemon-soft) 44%, transparent), transparent 24%),
+    radial-gradient(circle at 12% 90%, color-mix(in srgb, var(--dsw-alias-yanami-mint) 6%, transparent), transparent 28%),
+    color-mix(in srgb, var(--dsw-alias-yanami-glass-fill) 86%, transparent);
 }
 
 .detailsCol {
   overflow: hidden;
   background: var(--dsw-alias-yanami-glass-fill-strong);
   border-left: 1px solid var(--dsw-alias-yanami-glass-border);
-  box-shadow: var(--dsw-alias-yanami-card-shadow);
+  box-shadow: -6px 0 26px color-mix(in srgb, var(--dsw-alias-yanami-blue) 5%, transparent);
 }
 
-/* The details subtree stays mounted at zero width, so its border must not paint
-   a 1px seam. The collapsed sidebar instead retains a bordered compact rail. */
 .frame[data-details-collapsed] .detailsCol {
   border-left: none;
   box-shadow: none;
 }
 
-/* Drag handles are frame children (columns clip overflow): an 8px hit strip
-   centered on the column border via inline left, above column content. Details
-   adds a visible 12x32 pill at vertical center; sidebar keeps only the hit strip. */
 .handle {
   position: absolute;
   top: 0;
@@ -97,8 +92,6 @@
   cursor: col-resize;
   z-index: 2;
   touch-action: none;
-  /* Rides the same curve as the tracks so the pill stays on the moving
-     border during collapse/expand; paused while dragging (frame rule). */
   transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
@@ -125,8 +118,6 @@
   background: var(--dsw-alias-button-floating-fill);
   border: 1px solid var(--dsw-alias-yanami-glass-border);
   box-shadow: var(--dsw-alias-yanami-card-shadow);
-  /* Hover affordance: the details pill hides until the pointer is over its
-     column, the strip itself, or a drag. */
   opacity: 0;
   transition:
     opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out),
@@ -154,4 +145,11 @@
 
 .overlayLayer > * {
   pointer-events: auto;
+}
+
+:global(body:not([data-ds-dark-theme])) .centerCol {
+  background:
+    radial-gradient(circle at 90% 5%, rgba(255, 229, 157, 0.18), transparent 25%),
+    radial-gradient(circle at 13% 91%, rgba(137, 210, 199, 0.08), transparent 31%),
+    linear-gradient(160deg, rgba(247, 252, 255, 0.83), rgba(253, 254, 255, 0.9) 48%, rgba(247, 253, 251, 0.84));
 }
