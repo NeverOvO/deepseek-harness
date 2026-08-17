@@ -14,20 +14,20 @@ This backlog operationalizes `UI_VISUAL_AND_PRODUCT_CONSTRAINTS.md`. Keep it cur
 ## P1 — visual normalization
 
 - [x] Add a first desktop-density pass for Home, Settings and Project Memory so 1440–1728 wide Electron windows do not feel zoomed or oversized.
-- [ ] Establish reusable surface/card spacing and radius rules across Workbench home.
-- [ ] Normalize Do / Spec / Plan / Review / Ship cards and selected states.
+- [x] Establish reusable surface/card spacing and radius rules across Workbench home.
+- [x] Normalize Do / Spec / Plan / Review / Ship cards and selected states.
 - [ ] Normalize header chips/buttons between Home and Conversation.
-- [ ] Improve workspace/sidebar hierarchy: section labels, current workspace, current session, actions.
-- [ ] Normalize Project Memory, Mission Cockpit and Evidence surfaces to one card language.
+- [x] Improve workspace/sidebar hierarchy: section labels, current workspace, current session, actions.
+- [x] Normalize Project Memory, Mission Cockpit and Evidence surfaces to one card language.
 - [ ] Improve empty/loading/error states so they feel intentional rather than raw technical states.
-- [ ] Validate the Home + resident composer composition at common Electron viewport heights (760 / 820 / 900 CSS px) without immediate unnecessary scrolling.
+- [x] Validate the Home + resident composer composition at common Electron viewport heights (760 / 820 / 900 CSS px) without immediate unnecessary scrolling.
 
 ## P2 — approved light visual direction
 
-- [ ] Make light theme the visual reference implementation for Yanami Workbench.
-- [ ] Introduce airy blue/white surface tokens and restrained glass treatment through `ui-theme`.
+- [x] Make light theme the visual reference implementation for Yanami Workbench surfaces.
+- [x] Introduce airy blue/white surface tokens and restrained glass treatment through `ui-theme`.
 - [ ] Reduce dark/heavy visual mass without sacrificing contrast.
-- [ ] Refine shadows/borders/radii at token level instead of page-local overrides.
+- [ ] Refine remaining shadows/borders/radii at token level instead of page-local overrides.
 - [ ] Add restrained companion illustration zones that do not interfere with functional content.
 
 ## P3 — interaction polish
