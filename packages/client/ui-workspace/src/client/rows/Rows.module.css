@@ -8,11 +8,17 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   padding: 0 8px;
   cursor: pointer;
   user-select: none;
   color: var(--dsw-alias-label-primary);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease;
 }
 
 .projectRow:hover,
@@ -21,7 +27,14 @@
 }
 
 .sessionRow.selected {
-  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-yanami-sky) 20%,
+    var(--dsw-alias-interactive-bg-selected)
+  );
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 70%, transparent);
+  color: var(--dsw-alias-yanami-navy);
 }
 
 .searchResultRow {
@@ -31,13 +44,17 @@
   width: 100%;
   min-height: 48px;
   box-sizing: border-box;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   padding: 4px 8px;
   background: transparent;
   cursor: pointer;
   text-align: left;
   color: var(--dsw-alias-label-primary);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .searchResultRow:hover {
@@ -45,7 +62,13 @@
 }
 
 .searchResultRow.selected {
-  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-yanami-sky) 20%,
+    var(--dsw-alias-interactive-bg-selected)
+  );
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 70%, transparent);
 }
 
 .searchResultHeading {
@@ -98,6 +121,7 @@
   height: 34px;
   align-items: center;
   box-sizing: border-box;
+  font-weight: 520;
 }
 
 .projectRow .rowActions {
@@ -351,6 +375,12 @@
   .sessionRow,
   .arrow {
     animation: none;
+    transition: none;
+  }
+
+  .projectRow,
+  .sessionRow,
+  .searchResultRow {
     transition: none;
   }
 }
