@@ -1,10 +1,8 @@
-/* Tree rows: project 34px, session 32px, radius 8, indent step 22px
-   (16px slot + 6px gap). Hover swaps
-   are pure CSS: project folder -> chevron + action buttons; session time ->
-   ellipsis button. */
+/* Tree rows: compact project/session hierarchy for the Yanami sidebar. */
 
 .projectRow,
 .sessionRow {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -18,23 +16,36 @@
     background-color 120ms ease,
     border-color 120ms ease,
     box-shadow 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    transform 120ms ease;
 }
 
 .projectRow:hover,
 .sessionRow:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 7%, transparent);
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.sessionRow.selected {
-  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--dsw-alias-yanami-sky) 20%,
-    var(--dsw-alias-interactive-bg-selected)
-  );
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 70%, transparent);
+.projectRow:hover {
   color: var(--dsw-alias-yanami-navy);
+}
+
+.sessionRow.selected {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 22%, transparent);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--dsw-alias-yanami-sky) 27%, var(--dsw-alias-interactive-bg-selected)),
+      color-mix(in srgb, var(--dsw-alias-yanami-glass-fill-strong) 55%, var(--dsw-alias-interactive-bg-selected))
+    );
+  box-shadow:
+    inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 82%, transparent),
+    0 4px 14px color-mix(in srgb, var(--dsw-alias-yanami-blue) 7%, transparent);
+  color: var(--dsw-alias-yanami-navy);
+}
+
+.sessionRow.selected .time,
+.sessionRow.selected .slot {
+  color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 58%, var(--dsw-alias-label-tertiary));
 }
 
 .searchResultRow {
@@ -45,7 +56,7 @@
   min-height: 48px;
   box-sizing: border-box;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 10px;
   padding: 4px 8px;
   background: transparent;
   cursor: pointer;
@@ -58,17 +69,16 @@
 }
 
 .searchResultRow:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 8%, transparent);
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .searchResultRow.selected {
-  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--dsw-alias-yanami-sky) 20%,
-    var(--dsw-alias-interactive-bg-selected)
-  );
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 70%, transparent);
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 20%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-yanami-sky) 22%, var(--dsw-alias-interactive-bg-selected));
+  box-shadow:
+    inset 2px 0 0 color-mix(in srgb, var(--dsw-alias-yanami-blue) 76%, transparent),
+    var(--dsw-alias-yanami-card-shadow);
 }
 
 .searchResultHeading {
@@ -116,24 +126,20 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* Compact one-line Workspace row after removing the session-count subtitle. */
 .projectRow {
   height: 34px;
   align-items: center;
   box-sizing: border-box;
-  font-weight: 520;
+  font-weight: 560;
 }
 
 .projectRow .rowActions {
   height: 20px;
 }
 
-/* Session cell (figma): pad 8, a 16px status slot, then a 4px title gap. */
 .sessionRow {
   height: 32px;
   gap: 0;
-  /* Mount fade: session rows appear by unfolding a group (or the tree
-     mounting). Stable row keys keep already-visible rows from replaying it. */
   animation: row-in 150ms var(--ds-ease-in-out);
 }
 
@@ -169,16 +175,13 @@
 }
 
 .folderActive {
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-yanami-blue);
 }
 
-
-/* Project leading slot: folder by default, expand arrow on row hover. */
 .projectRow .chevron { display: none; }
 .projectRow:hover .chevron { display: inline-flex; }
 .projectRow:hover .folder { display: none; }
 
-/* Expand arrow (filled triangle): points right closed, rotates to point down open. */
 .arrow {
   transition: transform 150ms var(--ds-ease-in-out);
 }
@@ -208,12 +211,13 @@
   min-width: 0;
   font-size: 14px;
   line-height: 20px;
-  padding: 0 2px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-yanami-blue) 18%, var(--dsw-alias-border-l2));
+  border-radius: 6px;
   background: var(--dsw-alias-button-elevated-fill);
   color: inherit;
   outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-yanami-blue) 7%, transparent);
 }
 
 .sessionRow .title {
@@ -240,8 +244,6 @@
   flex: none;
 }
 
-/* Trailing action buttons surface on hover only (figma 27:4668 / 27:4656):
-   bare 16px glyphs, gap 12, tertiary grey. */
 .rowActions {
   flex: none;
   display: none;
@@ -261,15 +263,12 @@
   display: none;
 }
 
-/* An open row menu pins the hover affordances (figma: the row keeps its
-   hover fill while its dropdown is up). */
 .projectRow.menuOpen,
 .sessionRow.menuOpen {
+  border-color: color-mix(in srgb, var(--dsw-alias-yanami-blue) 9%, transparent);
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Session drag insert marker: a leading chevron and 2px rule between rows,
-   absolutely positioned so it neither resembles a row border nor changes layout. */
 .sessionRow.dropBefore,
 .sessionRow.dropAfter {
   position: relative;
@@ -310,7 +309,6 @@
   bottom: -7px;
 }
 
-/* Hover-card body (figma 169:16903): dark surface, fixed colors both themes. */
 .hoverContent {
   display: flex;
   flex-direction: column;
@@ -362,13 +360,16 @@
 }
 
 .iconButton:hover {
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-yanami-navy);
 }
 
-/* Chevrons ride the caption grey (#ADB2B8); the folder glyph stays one step
-   darker (tertiary, #81858C) per the cell spec. */
 .chevron {
   color: var(--dsw-alias-label-caption);
+}
+
+:global(body:not([data-ds-dark-theme])) .sessionRow.selected {
+  background:
+    linear-gradient(135deg, rgba(211, 235, 252, 0.72), rgba(244, 250, 255, 0.92));
 }
 
 @media (prefers-reduced-motion: reduce) {
