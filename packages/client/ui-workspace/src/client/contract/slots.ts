@@ -6,7 +6,8 @@
  *   list, workspace dialogs). It registers this package's viewing store and
  *   consumes the shell's two-fact owner share (wide / expandSidebar).
  * - WorkspacePicker fills the conversation empty-state hole (menu + error
- *   dialog shared with the browser).
+ *   dialog shared with the browser) and exposes the selected Workspace's
+ *   durable Project Memory action beside the picker.
  *
  * Each registration also declares one **directory-flow hole** (`single`
  * kind): the slot a composed picker package's client half fills with its
@@ -28,7 +29,7 @@ import type { HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, Props
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
-  SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView,
+  ProjectMemoryController, SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
@@ -148,18 +149,21 @@ export type WorkspaceBrowserProps =
 
 /**
  * Picker-private injected share. Pick semantics remain in the owner's onPick
- * callback; this callback creates only the real Host Workspace. A type alias
- * supplies the implicit index signature required by the registry.
+ * callback; this surface creates only the real Host Workspace and routes the
+ * selected Workspace into the same durable Project Memory controller used by
+ * the session header.
  */
 export type WorkspacePickerInjected = DirectoryPickingInjected & {
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** Resolve the selected Workspace's durable Project Memory controller lazily on explicit open. */
+  projectMemoryFor: (workspaceId: WorkspaceId) => ProjectMemoryController
 }
 
 /**
- * Full picker props: the owner share plus the creation callback and the
- * locale seat. The two picker holes (blank-session hero / New-Session view)
- * share one owner currency, so one composed type serves both registrations.
+ * Full picker props: the owner share plus creation / Project Memory callbacks
+ * and the locale seat. The two picker holes (blank-session hero / New-Session
+ * view) share one owner currency, so one composed type serves both registrations.
  */
 export type WorkspacePickerProps =
   PropsRuntime<'conversation.hero.workspace'>
