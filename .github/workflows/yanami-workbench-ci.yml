@@ -11,6 +11,7 @@ on:
       - 'packages/bundle/web-app/**'
       - 'packages/client/ui-conversation/**'
       - 'packages/client/ui-primitives/**'
+      - 'packages/client/ui-settings-general/**'
       - 'packages/client/ui-workspace/**'
       - 'packages/client/ui-theme/**'
       - 'packages/plan/plan-mode/**'
@@ -111,6 +112,8 @@ jobs:
           packages/bundle/web-app/tests/project-memory-consolidation.spec.ts
           packages/workspace/workspace/tests/project-memory-consolidation.spec.ts
           packages/client/ui-primitives/tests/modal-focus.client.spec.tsx
+          packages/client/ui-settings-general/tests/settings-root.client.spec.tsx
+          packages/client/ui-settings-general/tests/settings-focus.client.spec.tsx
           packages/client/ui-workspace/tests/apply.client.spec.ts
           packages/client/ui-workspace/tests/project-memory-header-slot.client.spec.tsx
           packages/client/ui-workspace/tests/project-memory-header.client.spec.tsx
