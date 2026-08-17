@@ -8,6 +8,7 @@ import type {
 } from '../contract/slots.ts'
 import type { ViewTab } from '../contract/views.ts'
 import css from './ConversationRoot.module.css'
+import stateCss from './ConversationSession.module.css'
 
 /** Full props composed from the strict session body contract. */
 export type ConversationSessionProps = ConversationSessionSlotProps
@@ -79,6 +80,11 @@ export function ConversationSessionHeader({
     : openState === 'open'
       ? t('view.chat')
       : t('chat.loadingHistory')
+  const fallbackState = openState === 'error'
+    ? 'error'
+    : openState === 'open'
+      ? 'ready'
+      : 'loading'
 
   return (
     <header
@@ -107,8 +113,16 @@ export function ConversationSessionHeader({
                   )
                 })}
                 {ancestry.length === 0 && (
-                  <span className={css.crumbCurrent} role="status" aria-live="polite">
-                    {fallbackTitle}
+                  <span
+                    className={stateCss.fallbackStatus}
+                    data-state={fallbackState}
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    aria-busy={fallbackState === 'loading' || undefined}
+                  >
+                    <span className={stateCss.fallbackDot} aria-hidden="true" />
+                    <span>{fallbackTitle}</span>
                   </span>
                 )}
               </nav>
